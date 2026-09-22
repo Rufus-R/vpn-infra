@@ -1,0 +1,37 @@
+# === Secrets (never commit) ===
+*.pem
+*.key
+*.crt
+.env
+.env.local
+.env.*.local
+secrets/*.encrypted
+secrets/*.key
+
+# === Backups ===
+*.bak
+*_backup_*
+*.tar.gz
+*.zip
+
+# === Python / Bot ===
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+*.db
+*.sqlite3
+.mypy_cache/
+.pytest_cache/
+
+# === OS ===
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# === IDE ===
+.idea/
+.vscode/
+*.iml
