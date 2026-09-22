@@ -1,0 +1,9 @@
+services:
+  relay:
+    image: ghcr.io/xtls/xray-core:latest
+    container_name: relay-node
+    restart: always
+    network_mode: host
+    volumes:
+      - ./config.json:/etc/xray/config.json:ro
+    command: ["run", "-config", "/etc/xray/config.json"]
