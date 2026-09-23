@@ -304,3 +304,6 @@ cd /opt/marzban && docker compose restart
 - Расписание: каждое воскресенье в 04:00
 - Лог: `/var/log/marzban-geo-update.log`
 - Базы: Loyalsoldier (geosite + geoip)
+
+## Завершено 22.09.2026
+- [x] Сбор конфигов с S_RU (Marzban, xray_config, scripts)
