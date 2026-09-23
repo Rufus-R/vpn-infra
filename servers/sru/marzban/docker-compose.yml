@@ -1,0 +1,9 @@
+services:
+  marzban:
+    image: gozargah/marzban:latest
+    restart: always
+    network_mode: host
+    env_file: .env
+    volumes:
+      - /var/lib/marzban:/var/lib/marzban
+      - /opt/marzban/xray-assets:/usr/local/share/xray
