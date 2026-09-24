@@ -39,7 +39,7 @@ Marzban панель доступна по пути /dashboard/ (не по ко�
   при необходимости выносить EU-exit на отдельный VPS
 
 ### S1, S2 (домашняя часть) — БЕЗ ИЗМЕНЕНИЙ
-См. основную документацию /root/docs/architecture/overview.md
+См. основную документацию /root/vpn-infra/docs/architecture/overview.md
 
 ## Схема маршрутизации трафика клиентов (geo-split)
 
