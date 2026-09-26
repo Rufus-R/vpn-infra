@@ -3,23 +3,24 @@
 ## Файлы
 
 ```
-/etc/iptables/rules.v4              # Сохранённые правила (22.06.2026)
+/etc/iptables/rules.v4              # Сохранённые правила (26.09.2026)
 ```
 
 Сохранение: `netfilter-persistent save`
 
-## Актуальное состояние (live, 03.08.2026)
+## Актуальное состояние (live, 26.09.2026, после демонтажа MTProxy)
 
 ### INPUT chain
 
 ```
 1  ACCEPT  src 10.8.0.0/24  tcp/8080    # vpn-admin из сети S2
 2  ACCEPT  src 10.9.0.0/24  tcp/8080    # vpn-admin из клиентской сети
-3  ACCEPT  *                tcp/10443   # ⚠️ неизвестный порт (тест MTG?)
-4  ACCEPT  *                tcp 443,8443,9443  # MTG порты (MTG отложен)
-5  ACCEPT  *                udp/1194    # OpenVPN сервер
-6  DROP    *                tcp/8080    # блок остальных на vpn-admin
+3  ACCEPT  *                udp/1194    # OpenVPN сервер
+4  DROP    *                tcp/8080    # блок остальных на vpn-admin
 ```
+
+⚠️ 26.09.2026: правила для портов `10443` и `443,8443,9443` (MTG) удалены
+при демонтаже MTProxy. Подробности: `services/archive/mtg-deprecated-20260926.md`.
 
 ### FORWARD chain
 
@@ -42,24 +43,18 @@
 4  DROP    *                 *                     # все остальные
 ```
 
-⚠️ **Счётчики VPN_LAN = 0** — ни одного пакета к LAN не прошло.
-Это подтверждает проблему из [../problems/lan-access.md](../problems/lan-access.md).
+⚠️ Список резидентов и счётчики требуют актуализации после смены схемы
+адресации клиентов (18.08.2026, статические 10.9.0.22–27) — не проверено
+на момент этой правки, см. `openvpn/clients.md`.
 
 ### NAT POSTROUTING
 
 ```
 1  MASQUERADE  !docker0  172.17.0.0/16       # Docker
 2  MASQUERADE  tun0      10.9.0.0/24         # Клиенты → S2
-3  MASQUERADE  tun0      owner UID 999       # MTProxy → S2
 ```
 
-### MANGLE OUTPUT
-
-```
-1  RETURN  owner UID 999  udp/53    # MTProxy DNS — не маркировать
-2  RETURN  owner UID 999  tcp/53    # MTProxy DNS — не маркировать
-3  MARK    owner UID 999  tcp/443   → 0x64   # MTProxy → mark 100
-```
+⚠️ 26.09.2026: правило `MASQUERADE tun0 owner UID 999` (MTProxy) удалено.
 
 ## Настройка (с нуля)
 
@@ -90,22 +85,12 @@ iptables -A INPUT -p tcp --dport 8080 -j DROP
 # OpenVPN
 iptables -A INPUT -p udp --dport 1194 -j ACCEPT
 
-# MTG
-iptables -A INPUT -p tcp -m multiport --dports 443,8443,9443 -j ACCEPT
-
-# MTProxy изоляция (mangle)
-iptables -t mangle -I OUTPUT 1 -m owner --uid-owner 999 -p udp --dport 53 -j RETURN
-iptables -t mangle -I OUTPUT 2 -m owner --uid-owner 999 -p tcp --dport 53 -j RETURN
-iptables -t mangle -I OUTPUT 3 -m owner --uid-owner 999 -p tcp --dport 443 -j MARK --set-mark 100
-iptables -t nat -A POSTROUTING -m owner --uid-owner 999 -o tun0 -j MASQUERADE
-
 netfilter-persistent save
 ```
 
 ## Известные проблемы
 
-1. **Правило tcp/10443** — неизвестное назначение, возможно тестовый порт MTG
-2. **Порты 8443/9443 открыты** хотя MTG на них не запущен
-3. **`rules.v4` устарел** — последнее сохранение 22.06.2026,
-   live-конфиг отличается (Docker добавил свои цепочки)
-   Обновить: `netfilter-persistent save`
+1. **`rules.v4` устарел** — требуется актуальное сохранение:
+   `netfilter-persistent save` (выполнено 26.09.2026 при демонтаже MTProxy)
+2. **VPN_LAN список резидентов и счётчики** не проверены после смены
+   схемы адресации клиентов — требуется live-проверка

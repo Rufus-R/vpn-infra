@@ -22,7 +22,6 @@
 - Создания OpenVPN клиентов (friend / family / opnsense)
 - Отзыва клиентов
 - Скачивания `.ovpn` конфигов
-- Просмотра MTProxy ссылок
 
 ## Доступ
 
@@ -48,7 +47,6 @@ CCD     = "/etc/openvpn/ccd"
 TA_KEY  = "/etc/openvpn/server/ta.key"
 SERVER_IP   = "194.55.236.229"
 SERVER_PORT = "1194"
-MTG_DIR = "/etc/mtg"
 OVPN_DIR = "/opt/vpn-admin/clients"
 ```
 
@@ -124,8 +122,9 @@ ss -tlnup | grep 8080
 2. **family CCD без метки** — `create_client()` не пишет `# group: family`,
    только `push "route ..."`. Новые family-клиенты определяются корректно,
    но не через метку, а через содержимое CCD
-3. **`crl-verify` не настроен** в server.conf — отозванные клиенты
-   могут подключаться (см. [../openvpn/s1-server.md](../openvpn/s1-server.md))
+3. **`crl-verify` настроен** в server.conf (см. [../openvpn/s1-server.md](../openvpn/s1-server.md)),
+   отозванные клиенты не могут подключиться — подтверждено логами
+   `CRL: loaded 1 CRLs from file` при каждом запуске сервиса
 
 ## Статус
 

@@ -21,7 +21,6 @@
 | Easy-RSA | 3.1.7-2 | 3.1.7-2 |
 | Docker | 29.6.0 | 29.6.0 |
 | Docker Compose | v5.1.4 | v5.1.4 |
-| MTG | 2.1.1 | — |
 | Python | 3.12.3 | 3.12.3 |
 | Gunicorn | 26.0.0 | — |
 | Flask | установлен в venv | — |
@@ -38,7 +37,6 @@
 | openvpn | `/usr/sbin/openvpn` |
 | easyrsa (S1) | `/etc/openvpn/server-easy-rsa/easyrsa` → `/usr/share/easy-rsa/easyrsa` |
 | easyrsa (S2) | `/etc/openvpn/easy-rsa/easyrsa` → `/usr/share/easy-rsa/easyrsa` |
-| mtg | `/usr/local/bin/mtg` |
 | gunicorn | `/opt/vpn-admin/venv/bin/gunicorn` |
 | certbot | `/usr/bin/certbot` |
 | docker | `/usr/bin/docker` |

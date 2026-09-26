@@ -20,7 +20,6 @@
 ├── sysctl.conf
 ├── pki/                    # PKI снимок (friend1, Mars, OPNsense01, Petr, SET, server)
 ├── ccd/                    # family-user1, lan-router, Mars, OPNsense01, SET
-└── mtg/                    # 443/8443/9443.toml + .env, 10443.env
 ```
 
 ## Бэкапы на S2
@@ -76,7 +75,7 @@ ip route show table all > /root/vpn-infra-backup/s1/routes_$(date +%Y%m%d).txt
 4. Конфиги: `/etc/openvpn/server/server.conf`, `/etc/openvpn/client/s2-client.conf`
 5. CCD: `/etc/openvpn/ccd/`
 6. app.py: `/opt/vpn-admin/app.py`
-7. MTG конфиги: `/etc/mtg/*.toml`
+7. ~~MTG конфиги~~ — неактуально, MTProxy демонтирован 26.09.2026
 8. Маршрутизация: `/etc/iproute2/rt_tables`, `/etc/openvpn/client/route-up.sh`
 9. iptables: `/etc/iptables/rules.v4`
 10. sysctl: `/etc/sysctl.conf`

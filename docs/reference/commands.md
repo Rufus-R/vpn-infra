@@ -7,7 +7,6 @@
 systemctl status openvpn-client@s2-client
 systemctl status openvpn-server@server
 systemctl status vpn-admin
-systemctl status mtg@443
 ```
 
 ### OpenVPN
@@ -53,12 +52,6 @@ for f in /etc/openvpn/ccd/*; do echo "=== $f ==="; cat "$f"; done
 ```bash
 journalctl -u vpn-admin --no-pager -n 20
 ss -tlnup | grep 8080
-```
-
-### MTG
-```bash
-journalctl -u mtg@443 --no-pager -n 20
-mtg access /etc/mtg/443.toml
 ```
 
 ### PKI

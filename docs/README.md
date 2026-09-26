@@ -16,7 +16,6 @@ docs/
 │   └── clients.md               # Список клиентов, CCD, сертификаты
 ├── services/
 │   ├── pihole.md                # Pi-hole на S2
-│   ├── mtg.md                   # MTProxy (MTG) на S1
 │   └── vpn-admin.md             # Веб-панель управления клиентами
 ├── networking/
 │   ├── iptables-s1.md           # Правила iptables на S1
@@ -69,7 +68,7 @@ docs/
 | OpenVPN клиенты → интернет через S2 | ✅ Работает |
 | Pi-hole на S2 | ✅ Работает |
 | vpn-admin панель | ✅ Работает |
-| MTProxy/MTG порт 443 | ⚠️ Ошибки подключения к fronting |
+| MTProxy/MTG | ❌ Демонтирован (26.09.2026), признан нежизнеспособным |
 | OPNsense подключение к S1 | ✅ Работает |
 | OPNsense → интернет через VPN | ✅ Работает |
 | Family → LAN доступ | ✅ Работает (исправлено 03.08.2026) |

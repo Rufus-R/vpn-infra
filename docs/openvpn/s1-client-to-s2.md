@@ -64,9 +64,6 @@ ip rule add from 10.9.0.0/24 to 192.168.0.0/24 table main pref 111 2>/dev/null |
 ip rule add from 10.9.0.0/24 table vpn pref 120 2>/dev/null || true
 ip route add default via 10.8.0.1 dev tun0 table vpn 2>/dev/null || true
 
-# Маршруты для MTProxy
-ip rule add fwmark 100 table 100 2>/dev/null || true
-ip route add default via 10.8.0.1 dev tun0 src 10.8.0.2 table 100 2>/dev/null || true
 ```
 
 ```bash
@@ -83,7 +80,6 @@ chmod +x /etc/openvpn/client/route-up.sh
 ### Актуальные ip rules (live):
 ```
 0:   from all lookup local
-109: from all fwmark 0x64 lookup 100          # MTProxy трафик
 110: from all to 10.9.0.0/24 lookup main      # трафик К клиентам
 111: from 10.9.0.0/24 to 192.168.0.0/24 lookup main  # клиенты → LAN
 120: from 10.9.0.0/24 lookup vpn              # клиенты → интернет
@@ -94,11 +90,6 @@ chmod +x /etc/openvpn/client/route-up.sh
 ### Таблица vpn (120):
 ```
 default via 10.8.0.1 dev tun0
-```
-
-### Таблица 100 (MTProxy):
-```
-default via 10.8.0.1 dev tun0 src 10.8.0.2
 ```
 
 ## Запуск

@@ -5,9 +5,9 @@
 ## Принятые решения
 
 - **OpenVPN НЕ переносится в Docker** (рабочая система, высокий риск)
-- **Переносятся в Docker**: sing-box, hysteria2, vpn-admin, mtg
+- **Переносятся в Docker**: sing-box, hysteria2, vpn-admin
 - **Pi-hole уже нативный на S2** — пока не трогаем
-- **MTProxy отложен** как приоритет
+- **MTProxy демонтирован 26.09.2026** (не переносится в Docker, признан нежизнеспособным)
 
 ## Let's Encrypt (Cloudflare DNS API)
 
@@ -71,7 +71,6 @@ Cron: `/etc/cron.d/certbot`
 | VLESS Reality | 2443 | TCP | sing-box, без сертификата |
 | VLESS TLS | 2444 | TCP | требует Let's Encrypt |
 | Hysteria 2 | 2445 | UDP | требует Let's Encrypt |
-| MTG (docker) | 2446 | TCP | отложено |
 | vpn-admin | 18080 | TCP | только из VPN |
 
 ### S2
@@ -100,7 +99,6 @@ vpn-infra/
 ├── s1/
 │   ├── docker-compose.yml
 │   ├── sing-box/config/
-│   ├── mtg/config/
 │   └── vpn-admin/
 └── s2/
     ├── docker-compose.yml

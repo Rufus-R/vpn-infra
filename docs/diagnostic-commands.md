@@ -10,10 +10,10 @@
 ### Статус ключевых сервисов
 
 ```bash
-systemctl is-active openvpn-server@server openvpn-client@s2-client vpn-admin mtg@443
+systemctl is-active openvpn-server@server openvpn-client@s2-client vpn-admin
 ```
 
-**Ожидается:** все четыре сервиса в статусе `active`.
+**Ожидается:** все три сервиса в статусе `active`.
 
 ### Подключённые клиенты OpenVPN
 

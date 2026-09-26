@@ -5,7 +5,6 @@
 | Порт | Протокол | Процесс | Bind | Доступ | Назначение |
 |------|----------|---------|------|--------|-----------|
 | 22 | TCP | sshd | `0.0.0.0` `[::]` | Все | SSH |
-| 443 | TCP | mtg | `0.0.0.0` | Все | MTProxy (отложено) |
 | 1194 | UDP | openvpn (server) | `0.0.0.0` | Все | OpenVPN сервер для клиентов |
 | 8080 | TCP | gunicorn | `10.9.0.1` | VPN only | vpn-admin панель |
 | ~57402 | UDP | openvpn (client) | `0.0.0.0` | — | Клиент → S2 (динамич.) |
@@ -17,7 +16,6 @@
 | 2443 | TCP | VLESS Reality (sing-box) |
 | 2444 | TCP | VLESS TLS (sing-box) |
 | 2445 | UDP | Hysteria 2 |
-| 2446 | TCP | MTG Docker (отложено) |
 | 18080 | TCP | vpn-admin (Docker, только VPN) |
 
 ---
