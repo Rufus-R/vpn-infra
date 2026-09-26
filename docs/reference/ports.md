@@ -13,10 +13,10 @@
 
 | Порт | Протокол | Назначение |
 |------|----------|-----------|
-| 2443 | TCP | VLESS Reality (sing-box) |
-| 2444 | TCP | VLESS TLS (sing-box) |
-| 2445 | UDP | Hysteria 2 |
-| 18080 | TCP | vpn-admin (Docker, только VPN) |
+| 18080 | TCP | vpn-admin (Docker, только VPN, низкий приоритет) |
+
+⚠️ Планы VLESS Reality/TLS/Hysteria2 для S1 отменены 26.09.2026 —
+см. `docker/migration.md`, `system-state.md` п.9.
 
 ---
 

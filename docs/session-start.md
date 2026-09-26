@@ -20,11 +20,11 @@ cat /root/vpn-infra/docs/architecture/overview.md
 # Коммерческий проект: обзор
 cat /root/vpn-infra/docs/commercial/overview.md
 
-# Коммерческий проект: развёртывание (финальный рабочий конфиг)
-cat /root/vpn-infra/docs/commercial/deployment.md
+# Коммерческий проект: статус миграции на 3x-ui (актуальный план)
+cat /root/vpn-infra/docs/commercial/migration-3xui.md
 
-# Известные проблемы (коммерческий)
-cat /root/vpn-infra/docs/commercial/known-issues.md
+# Коммерческий проект: архив Marzban-эпохи (для истории, при необходимости)
+ls /root/vpn-infra/docs/commercial/archive/
 ```
 
 ## 2. Диагностика (если нужно проверить состояние)
