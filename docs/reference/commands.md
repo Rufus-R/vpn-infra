@@ -68,6 +68,14 @@ tcpdump -ni tun0 icmp
 tcpdump -ni tun1 src 10.9.0.10
 ```
 
+### Проверка SSH-безопасности (ЕДИНСТВЕННО ДОСТОВЕРНЫЙ способ)
+```bash
+# НЕ доверять grep по /etc/ssh/sshd_config — cloud-init dropin может
+# перебивать значение через Include (см. system-state.md, п.6, 26.09.2026)
+sshd -T 2>/dev/null | grep -i passwordauthentication
+# Ожидается: "passwordauthentication no"
+```
+
 ### Ресурсы
 ```bash
 df -h
