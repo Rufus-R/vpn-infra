@@ -83,14 +83,22 @@ persist-key
 persist-tun
 status /var/log/openvpn-status-tun1.log
 verb 3
-```
-
-⚠️ **ВАЖНО — НЕ НАСТРОЕНО**: `crl-verify` отсутствует в конфиге!
-Отозванные клиенты могут подключаться. Нужно добавить:
-```conf
 crl-verify /etc/openvpn/server-easy-rsa/pki/crl.pem
 ```
-И перезапустить: `systemctl restart openvpn-server@server`
+
+✅ **crl-verify настроен** (строка 31 в `server.conf`, подтверждено
+26.09.2026): `crl-verify /etc/openvpn/server-easy-rsa/pki/crl.pem`.
+Каждый запуск сервиса подтверждает загрузку CRL в логах:
+`journalctl -u openvpn-server@server | grep -i crl` →
+`CRL: loaded 1 CRLs from file /etc/openvpn/server-easy-rsa/pki/crl.pem`.
+Отозванные клиенты (friend1, SET, Nikita, старый сертификат Vova от
+05.08.2026) не могут подключиться.
+
+Отзыв сертификата обновляет CRL немедленно (`easyrsa gen-crl`), но
+файл `crl.pem` перечитывается OpenVPN только при перезапуске сервиса
+или по истечении внутреннего кэша — при массовом/срочном отзыве
+рекомендуется `systemctl restart openvpn-server@server` для
+гарантии.
 
 ## Запуск
 
@@ -116,4 +124,4 @@ ROUTING_TABLE,192.168.0.0/24,OPNsense01,...
 
 **✅ Работает.** Клиенты подключаются, интернет через S2 работает.
 
-**⚠️ crl-verify не настроен** — см. выше.
+**✅ crl-verify настроен и подтверждён рабочим** — см. выше.

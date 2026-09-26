@@ -29,7 +29,6 @@ ip a
 ip rule list
 ip route show
 ip route show table vpn
-ip route show table 100
 ip route get 8.8.8.8 from 10.9.0.10     # как клиент видит интернет
 ip route get 192.168.0.1 from 10.9.0.10 # как клиент видит LAN
 ```

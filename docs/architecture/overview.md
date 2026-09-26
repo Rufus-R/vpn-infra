@@ -31,13 +31,14 @@
     │  10.9.0.0/24
     │  S1=10.9.0.1 (сервер)
     │
-    ├── Petr          10.9.0.2   (friend)
-    ├── Vova          10.9.0.3   (friend)
     ├── OPNsense01    10.9.0.5   (opnsense) ──► 192.168.0.0/24 (LAN)
     ├── Mars          10.9.0.10  (family)
-    ├── Anna          динамика   (family)
-    ├── SET01         динамика   (family)
-    └── Serafim       динамика   (friend)
+    ├── Petr          10.9.0.22  (friend)
+    ├── SET01         10.9.0.23  (family)
+    ├── Anna          10.9.0.24  (family)
+    ├── Serafim       10.9.0.25  (friend)
+    ├── Vova          10.9.0.26  (friend)
+    └── VovaL         10.9.0.27  (friend)
 ```
 
 ## Подсети

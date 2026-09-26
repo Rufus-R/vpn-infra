@@ -4,23 +4,36 @@
 
 Расположение: `/root/vpn-infra-backup/s1/`
 
-⚠️ **Бэкап снят ~22.06.2026 — устарел!**
-Не содержит: SET01, Anna, Vova, Serafim, Nikita
+⚠️ **Основной бэкап (`pki/`, конфиги) снят ~22.06.2026 — устарел!**
+Не содержит: SET01, Anna, Vova, Serafim, Nikita, VovaL, актуальные CCD
+(статические адреса 10.9.0.22–27 от 18.08.2026), актуальные iptables
+(без MTProxy, демонтирован 26.09.2026).
+
+✅ **Отдельный свежий снимок PKI**: `pki_20260920/` (20.09.2026) —
+содержит все 9 актуальных сертификатов (Anna, Mars, OPNsense01, Petr,
+Serafim, server, SET01, Vova, VovaL), подтверждено `ls -la` 26.09.2026.
+См. также раздел "Обновление бэкапа" ниже.
 
 ```
 /root/vpn-infra-backup/s1/
 ├── app.py
 ├── ca.crt, s1-client.crt, s1-client.key
 ├── s2-client.conf
-├── route-up.sh, route-100.txt, route-vpn.txt
+├── route-up.sh, route-100.txt, route-vpn.txt   # route-100.txt устарел (MTProxy демонтирован 26.09.2026)
 ├── server.conf
 ├── ta.key
 ├── ip-rules.txt
 ├── iptables.rules
 ├── sysctl.conf
-├── pki/                    # PKI снимок (friend1, Mars, OPNsense01, Petr, SET, server)
-├── ccd/                    # family-user1, lan-router, Mars, OPNsense01, SET
+├── pki/                    # УСТАРЕЛ (22.06.2026): friend1, Mars, OPNsense01, Petr, SET, server
+├── pki_20260920/           # Актуальнее (20.09.2026), полный набор из 9 клиентов
+├── ccd/                    # УСТАРЕЛ (22.06.2026): family-user1, lan-router, Mars, OPNsense01, SET
 ```
+
+⚠️ **Технический долг**: помимо PKI (`pki_20260920`), остальные компоненты
+бэкапа (конфиги, iptables, CCD целиком, route-up.sh) не обновлялись с
+22.06.2026 — требуется полный свежий снимок, не только PKI. См. раздел
+"Обновление бэкапа" ниже.
 
 ## Бэкапы на S2
 
