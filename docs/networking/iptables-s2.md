@@ -1,34 +1,68 @@
 # iptables на S2
 
+## Обновлено: 27.09.2026
+
 ## Файлы
 
 ```
-/etc/iptables/rules.v4              # Сохранённые правила (06.06.2026)
+/etc/iptables/rules.v4    # Сохранены через netfilter-persistent 27.09.2026
 ```
 
-## Актуальное состояние (live, 03.08.2026)
+## История: критический security-фикс 27.09.2026
 
-### INPUT chain
+До этой даты правила для портов 80/tcp, 53/tcp, 53/udp были в неверном
+порядке — ACCEPT для `0.0.0.0/0` стоял выше DROP-правил, из-за чего
+DROP никогда не срабатывал. Реальный эффект:
 
-```
-1   ACCEPT  in:tun0  tcp/80          # Pi-hole web
-2   ACCEPT  in:tun0  udp/53          # Pi-hole DNS
-3   ACCEPT  in:tun0  tcp/53          # Pi-hole DNS
-4   DROP    !tun0    tcp/80
-5   DROP    !tun0    udp/53
-6   DROP    !tun0    tcp/53
-7-15 ... (дублированные правила ACCEPT/DROP)
-16  ACCEPT  *        udp/1194        # OpenVPN
-17  DROP    *        udp/53
-18  DROP    *        tcp/53
-19-22 ... (дублированные DROP)
-```
+- Pi-hole DNS (53/tcp+udp) был открытым публичным резолвером
+- Pi-hole web admin (80/tcp) был доступен всему интернету
+- OpenVPN (1194/udp) был открыт всем источникам, без DROP-заглушки
+  вообще (не было даже недостижимого DROP ниже)
 
-⚠️ **ПРОБЛЕМА: множество дублированных правил**
-В INPUT накопилось 22 правила, хотя достаточно 7.
-Рекомендуется почистить.
+Порты 443/tcp и 123/udp (тоже используются Pi-hole — HTTPS admin и
+NTP) были задропаны корректно ещё до этого фикса — старая версия
+этого документа ошибочно утверждала обратное.
 
-### FORWARD chain
+Обнаружено и исправлено в ходе диагностической сессии 27.09.2026
+(изначальная задача — проверка доступности 3x-ui нод коммерческого
+проекта, см. `commercial/migration-3xui.md`). Вероятная причина
+накопления дублей — правки iptables через `-I` в разное время без
+ревизии итогового порядка правил.
+
+## Актуальное состояние INPUT chain (после фикса, 27.09.2026)
+
+policy: **ACCEPT** (⚠️ дефолт ACCEPT — каждый порт ОБЯЗАН иметь явный
+завершающий DROP, иначе трафик проходит по умолчанию)
+
+| # | Действие | Источник | Порт | Назначение |
+|---|----------|----------|------|-----------|
+| 1 | ACCEPT | 194.55.236.229 (S1) | tcp/10001 | диагностика relay |
+| 2 | ACCEPT | 10.8.0.0/24 | tcp/25307 | 3x-ui нода (S_RU) |
+| 3 | ACCEPT | 31.77.173.218 (мастер) | tcp/10001 | relay control |
+| 4 | ACCEPT | 31.77.169.67 (S_RU) | tcp/8443 | relay данные |
+| 5 | DROP | * | tcp/8443 | catchall |
+| 6 | ACCEPT | 10.8.0.0/24 | tcp/80 | Pi-hole web (только тоннель) |
+| 7 | ACCEPT | 10.8.0.0/24 | udp/53 | Pi-hole DNS (только тоннель) |
+| 8 | ACCEPT | 10.8.0.0/24 | tcp/53 | Pi-hole DNS (только тоннель) |
+| 9 | ACCEPT | 194.55.236.229 (S1) | udp/1194 | OpenVPN (только S1) |
+| 10 | DROP | * | tcp/80 | catchall |
+| 11 | DROP | * | udp/53 | catchall |
+| 12 | DROP | * | tcp/53 | catchall |
+| 13 | DROP | * | tcp/443 | catchall (Pi-hole HTTPS) |
+| 14 | DROP | * | udp/123 | catchall (Pi-hole NTP) |
+| 15 | ACCEPT | 194.55.236.229 (S1) | tcp/25307 | диагностика 3x-ui панели |
+| 16 | ACCEPT | 31.77.173.218 (мастер) | tcp/25307 | панель управления нодой |
+| 17 | ACCEPT | 46.32.82.242 | tcp/25307 | админ-доступ |
+| 18 | DROP | * | tcp/25307 | catchall |
+| 19 | ACCEPT | 31.77.169.67 (S_RU) | tcp/10001 | relay данные |
+| 20 | DROP | * | tcp/10001 | catchall |
+| 21 | DROP | * | udp/1194 | catchall |
+
+Pi-hole (`pihole-FTL`) реально слушает на `0.0.0.0` для портов
+53(tcp/udp), 80, 443, 123 — биндинг не ограничен интерфейсом tun0.
+Вся изоляция обеспечивается только правилами iptables выше.
+
+## FORWARD chain (без изменений)
 
 ```
 1  DOCKER-USER    (Docker)
@@ -37,52 +71,27 @@
 4  ACCEPT  in:tun0  out:ens3  (все)
 ```
 
-### NAT POSTROUTING
+## NAT POSTROUTING (без изменений, дубль MASQUERADE ещё не устранён)
 
 ```
 1  MASQUERADE  !docker0  172.17.0.0/16      # Docker
 2  MASQUERADE  ens3      10.8.0.0/24        # S1 клиент → интернет
-3  MASQUERADE  ens3      10.8.0.0/24        # ДУБЛЬ
+3  MASQUERADE  ens3      10.8.0.0/24        # ДУБЛЬ, не устранено
 4  MASQUERADE  ens3      10.9.0.0/24        # VPN-клиенты → интернет
 ```
 
-## Чистые правила (рекомендуемые)
+## Оставшийся техдолг
 
-```bash
-# Очистка
-iptables -F INPUT
-iptables -F FORWARD
-iptables -t nat -F POSTROUTING
-
-ETH=ens3
-
-# INPUT
-iptables -A INPUT -i tun0 -p tcp --dport 80 -j ACCEPT
-iptables -A INPUT -i tun0 -p udp --dport 53 -j ACCEPT
-iptables -A INPUT -i tun0 -p tcp --dport 53 -j ACCEPT
-iptables -A INPUT -p udp --dport 1194 -j ACCEPT
-iptables -A INPUT -p tcp --dport 80 -j DROP
-iptables -A INPUT -p udp --dport 53 -j DROP
-iptables -A INPUT -p tcp --dport 53 -j DROP
-# TODO: добавить блокировку 443 и 123
-iptables -A INPUT -p tcp --dport 443 -j DROP
-iptables -A INPUT -p udp --dport 123 -j DROP
-
-# FORWARD
-iptables -A FORWARD -i $ETH -o tun0 -m state --state RELATED,ESTABLISHED -j ACCEPT
-iptables -A FORWARD -i tun0 -o $ETH -j ACCEPT
-
-# NAT
-iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -o $ETH -j MASQUERADE
-iptables -t nat -A POSTROUTING -s 10.9.0.0/24 -o $ETH -j MASQUERADE
-
-netfilter-persistent save
-```
-
-## Известные проблемы
-
-1. **Дублированные правила** — 15+ дублей, сохранены в `rules.v4`
-2. **Дублированный MASQUERADE** для `10.8.0.0/24` в NAT
-3. **Порт 443/tcp НЕ заблокирован** — Pi-hole HTTPS доступен снаружи (если кто-то знает IP)
-4. **Порт 123/udp НЕ заблокирован** — Pi-hole NTP доступен снаружи
-5. **`rules.v4` устарел** — последнее сохранение 06.06.2026
+1. Дублированный MASQUERADE для `10.8.0.0/24` в NAT POSTROUTING —
+   не критично (второе правило недостижимо), но стоит убрать при
+   следующей чистке
+2. `ip6tables` пуст (policy ACCEPT, 0 правил вообще) — IPv6 трафик к
+   Pi-hole/OpenVPN не фильтруется. Проверить, маршрутизируется ли на
+   S2 IPv6 вообще, и либо задать зеркальные правила, либо отключить
+   IPv6 на внешнем интерфейсе
+3. Критично для будущих правок: ЛЮБАЯ вставка через `iptables -I`
+   без явного номера строки попадёт в начало цепочки и может снова
+   нарушить порядок ACCEPT/DROP (именно так возникла проблема
+   27.09.2026). Использовать `-A` с точным пониманием, перед каким
+   DROP нужно вставить правило, либо указывать номер строки, сверяясь
+   с таблицей выше
