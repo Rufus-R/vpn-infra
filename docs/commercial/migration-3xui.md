@@ -90,3 +90,26 @@
 12. [ ] Демонтаж/архивация Marzban на S_RU после успешного переезда
 13. [ ] Обновить Telegram-бота под API 3x-ui (был спроектирован под
         Marzban API, см. `bot.md` — потребует пересмотра интеграции)
+
+## Сессия 27.09.2026 — результаты
+
+### Сделано
+- 3x-ui v3.8.5 установлен на S2 (77.105.161.151:25307)
+- S2 добавлен как нода в мастер-панель (TLS Skip verify, самоподписанный сертификат)
+- Inbound s2-relay-in (VLESS/TLS) на S2:10001 — только для S_RU
+- Outbound to-s2-relay на S_RU → S2:10001
+- Routing rule на S2: s2-relay-in → direct
+- Reality inbound на S_RU:443 (VLESS+Reality, www.cloudflare.com)
+- iptables S2: 25307 (мастер + 46.32.82.242 + 10.8.0.0/24), 8443 (S_RU), 10001 (S_RU + мастер)
+
+### Нерешено
+- v2rayNG не подключается через WiFi (причина не установлена)
+- Hiddify не работает — mlkem768x25519plus не поддерживается клиентом
+- Geo-split routing не настроен (удалён после проблем)
+- Mux в v2rayNG возможно конфликтует с xtls-rprx-vision
+
+### TODO следующей сессии
+1. Диагностика v2rayNG через WiFi
+2. Отключить mlkem768x25519plus в inbound (decryption/encryption → none)
+3. Настроить geo-split routing после восстановления базового подключения
+4. Проверить flow xtls-rprx-vision в клиентском конфиге
