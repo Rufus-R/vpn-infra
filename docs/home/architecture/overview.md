@@ -88,7 +88,7 @@
 Pi-hole на S2 физически слушает на `0.0.0.0:53` (все интерфейсы,
 включая внешний `ens3`), не только на `10.8.0.1`. Внешний доступ
 ограничен на уровне iptables источником `10.8.0.0/24` — см.
-[networking/iptables-s2.md](../networking/iptables-s2.md).
+[shared/networking/iptables-s2.md](../../shared/networking/iptables-s2.md).
 
 **Исправлено 27.09.2026**: до этой даты правила iptables были в
 неверном порядке, и порт 53 (tcp/udp) фактически был открыт всему

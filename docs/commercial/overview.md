@@ -89,11 +89,11 @@ Marzban панель доступна по пути /dashboard/ (не по ко�
 
 ## Ссылки на связанные документы
 
-- [routing.md](routing.md) — детали geo-split, routing-правила
+- [archive/routing-marzban-20260925.md](archive/routing-marzban-20260925.md) (архив Marzban-эпохи) — детали geo-split, routing-правила
 - [tariffs.md](tariffs.md) — тарифная сетка, триал, рефералка
 - [bot.md](bot.md) — схема БД бота, сценарии оплаты
-- [deployment.md](deployment.md) — docker-compose, порядок установки
-- [known-issues.md](known-issues.md) — риски и ограничения подробно
+- [archive/deployment-marzban-20260925.md](archive/deployment-marzban-20260925.md) (архив Marzban-эпохи) — docker-compose, порядок установки
+- [archive/known-issues-marzban-20260925.md](archive/known-issues-marzban-20260925.md) (архив Marzban-эпохи) — риски и ограничения подробно
 
 ## Обновление 26.09.2026 — переход на 3x-ui
 

@@ -1,78 +1,65 @@
 # VPN Infrastructure — Документация
 
-## Последнее обновление: 2026-08-03
+## Последнее обновление: 28.09.2026
 
-## Структура документации
+## Принципы организации документации
+
+- `docs/` (корень) — кросс-контурные мета-файлы: этот README,
+  `session-start.md` (точка входа сессии), `system-state.md` (текущее
+  состояние, обновляется после каждой сессии), `diagnostic-commands.md`
+  (read-only диагностика)
+- `docs/home/` — домашний контур (S1, S2 как OpenVPN/Pi-hole, OPNsense, LAN)
+- `docs/commercial/` — коммерческий проект (S_RU, Panel, S2 как 3x-ui нода)
+- `docs/shared/` — инфраструктура на стыке контуров (S2 физически один
+  хост для обеих ролей): `shared/networking/iptables-s2.md`,
+  `shared/reference/ports.md`
+- Правило архивации: закрытые проблемы старше ~1 сессии с длинным
+  post-mortem выносятся в `<раздел>/archive/`, в живом документе
+  остаётся краткое резюме + ссылка
+
+## Структура
 
 ```
 docs/
-├── README.md                    # Этот файл — навигация и быстрый старт
-├── architecture/
-│   └── overview.md              # Общая архитектура, схема сети, узлы
-├── openvpn/
-│   ├── s2-server.md             # OpenVPN сервер на S2 (Европа)
-│   ├── s1-client-to-s2.md      # OpenVPN клиент S1 → S2
-│   ├── s1-server.md             # OpenVPN сервер S1 для клиентов
-│   └── clients.md               # Список клиентов, CCD, сертификаты
-├── services/
-│   ├── pihole.md                # Pi-hole на S2
-│   └── vpn-admin.md             # Веб-панель управления клиентами
-├── networking/
-│   ├── iptables-s1.md           # Правила iptables на S1
-│   ├── iptables-s2.md           # Правила iptables на S2
-│   └── routing.md               # Policy routing, таблицы маршрутизации
-├── admin/
-│   ├── backups.md               # Бэкапы, артефакты, расположение файлов
-│   └── opnsense.md              # Настройки OPNsense
-├── docker/
-│   └── migration.md             # План миграции в Docker, статус
-├── problems/
-│   ├── lan-access.md            # ОТКРЫТАЯ ПРОБЛЕМА: family → LAN
-│   └── known-issues.md          # Известные проблемы и замечания
-├── commercial/
-│   ├── overview.md               # Архитектура коммерческого VPN-проекта
-│   ├── routing.md                 # Geo-split маршрутизация RU/EU
-│   ├── tariffs.md                 # Тарифы, триал, реферальная программа
-│   ├── bot.md                     # Telegram-бот, схема БД, сценарии
-│   ├── deployment.md              # Порядок развёртывания
-│   └── known-issues.md            # Риски коммерческого проекта
-└── reference/
-    ├── commands.md              # Полезные команды для диагностики
-    ├── ports.md                 # Таблица всех портов
-    └── versions.md              # Версии ПО, ресурсы серверов
+├── README.md, session-start.md, system-state.md, diagnostic-commands.md
+├── home/
+│   ├── architecture/overview.md
+│   ├── openvpn/{clients,s1-server,s2-server,s1-client-to-s2}.md
+│   ├── networking/{routing,iptables-s1}.md
+│   ├── admin/{backups,opnsense}.md
+│   ├── docker/migration.md
+│   ├── services/{pihole,vpn-admin}.md, services/archive/
+│   ├── problems/known-issues.md, problems/archive/
+│   └── reference/{commands,versions}.md
+├── shared/
+│   ├── networking/iptables-s2.md
+│   └── reference/ports.md
+└── commercial/
+    ├── overview.md, migration-3xui.md, tariffs.md, bot.md
+    ├── reference/{commands,versions}.md (заглушки, TODO)
+    └── archive/ (Marzban-эпоха)
 ```
 
 ## Быстрая навигация
 
 | Задача | Файл |
 |--------|------|
-| Понять общую схему сети | [architecture/overview.md](architecture/overview.md) |
-| Настроить OpenVPN на S2 | [openvpn/s2-server.md](openvpn/s2-server.md) |
-| Настроить S1 как клиент к S2 | [openvpn/s1-client-to-s2.md](openvpn/s1-client-to-s2.md) |
-| Настроить OpenVPN сервер S1 | [openvpn/s1-server.md](openvpn/s1-server.md) |
-| Добавить/отозвать клиента | [services/vpn-admin.md](services/vpn-admin.md) |
-| Список всех клиентов | [openvpn/clients.md](openvpn/clients.md) |
-| Настройки OPNsense | [admin/opnsense.md](admin/opnsense.md) |
-| Диагностика проблемы LAN | [problems/lan-access.md](problems/lan-access.md) |
-| Все открытые проблемы | [problems/known-issues.md](problems/known-issues.md) |
-| Все порты | [reference/ports.md](reference/ports.md) |
-| Быстрые команды | [reference/commands.md](reference/commands.md) |
-| Миграция в Docker | [docker/migration.md](docker/migration.md) |
-| Коммерческий VPN-проект | [commercial/overview.md](commercial/overview.md) |
+| Начать сессию | [session-start.md](session-start.md) |
+| Текущее состояние системы | [system-state.md](system-state.md) |
+| Домашняя архитектура | [home/architecture/overview.md](home/architecture/overview.md) |
+| Домашние открытые проблемы | [home/problems/known-issues.md](home/problems/known-issues.md) |
+| iptables S2 (общий хост) | [shared/networking/iptables-s2.md](shared/networking/iptables-s2.md) |
+| Все порты (общий хост) | [shared/reference/ports.md](shared/reference/ports.md) |
+| Коммерческий проект | [commercial/overview.md](commercial/overview.md) |
+| Миграция на 3x-ui | [commercial/migration-3xui.md](commercial/migration-3xui.md) |
 
-## Текущий статус сервисов
+## Текущий статус (28.09.2026)
 
 | Компонент | Статус |
 |-----------|--------|
-| OpenVPN S2↔S1 туннель | ✅ Работает |
-| OpenVPN клиенты → интернет через S2 | ✅ Работает |
+| OpenVPN S2↔S1, клиенты → интернет | ✅ Работает |
 | Pi-hole на S2 | ✅ Работает |
-| vpn-admin панель | ✅ Работает |
-| MTProxy/MTG | ❌ Демонтирован (26.09.2026), признан нежизнеспособным |
-| OPNsense подключение к S1 | ✅ Работает |
-| OPNsense → интернет через VPN | ✅ Работает |
-| Family → LAN доступ | ✅ Работает (исправлено 03.08.2026) |
-| Let's Encrypt | ❌ Ошибка авторизации |
-| sing-box / Hysteria2 | ❌ Отменено (26.09.2026) — OpenVPN достаточен, см. system-state.md п.9 |
-| Docker-миграция | 🔲 В процессе планирования |
-| Коммерческий VPN (S_RU) | Миграция Marzban → 3x-ui решена, техническая часть не начата, см. commercial/migration-3xui.md |
+| S2 security (открытые порты 53/80/1194) | ✅ Исправлено 27.09.2026 |
+| MTProxy / relay-node (legacy) | ❌ Демонтированы (26.09, 28.09.2026) |
+| Коммерческий проект: Marzban | ❌ Полностью демонтирован (28.09.2026) |
+| Коммерческий проект: 3x-ui | 🔶 В процессе, базовый канал работает, geo-split не настроен |
