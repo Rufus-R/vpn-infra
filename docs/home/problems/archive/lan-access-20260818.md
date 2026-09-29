@@ -106,7 +106,7 @@ push "route-gateway <tun_ip>"
 требует.
 
 Реальная первопричина обеих проблем подробно описана в
-[known-issues.md](known-issues.md), раздел "Конфликт Virtual Address
+[known-issues.md](../known-issues.md), раздел "Конфликт Virtual Address
 между статикой и динамическим пулом".
 
 ### Диагностический путь (кратко)
