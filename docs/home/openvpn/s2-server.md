@@ -14,7 +14,7 @@
 /etc/openvpn/ta.key
 /etc/openvpn/ccd/s1-client
 /etc/openvpn/ccd/DEFAULT
-/etc/iptables/rules.v4
+/etc/ufw/user.rules, /etc/ufw/before.rules  (firewall S2 — ufw с 01.10.2026; ранее /etc/iptables/rules.v4)
 /etc/sysctl.conf
 /var/log/openvpn-status.log
 ```
@@ -22,7 +22,7 @@
 ## Установка
 
 ```bash
-apt update && apt install -y openvpn easy-rsa iptables-persistent
+apt update && apt install -y openvpn easy-rsa iptables-persistent   # S2 с 01.10.2026: вместо iptables-persistent — ufw (iptables-persistent удалён)
 ```
 
 ## PKI (Easy-RSA)
@@ -110,6 +110,8 @@ sysctl -p
 ```
 
 ## iptables
+
+> ⚠️ **Устарело для S2 (с 01.10.2026).** Firewall S2 — `ufw` (правила в `/etc/ufw/user.rules`, NAT в `/etc/ufw/before.rules`); `iptables-persistent`/`netfilter-persistent` удалены. Актуально: [../../shared/networking/iptables-s2.md](../../shared/networking/iptables-s2.md). Блок ниже — историческое состояние до 01.10.2026.
 
 Файл: `/etc/iptables/rules.v4` (последнее сохранение: 06.06.2026)
 

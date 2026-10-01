@@ -48,7 +48,7 @@ docs/
 | Текущее состояние системы | [system-state.md](system-state.md) |
 | Домашняя архитектура | [home/architecture/overview.md](home/architecture/overview.md) |
 | Домашние открытые проблемы | [home/problems/known-issues.md](home/problems/known-issues.md) |
-| iptables S2 (общий хост) | [shared/networking/iptables-s2.md](shared/networking/iptables-s2.md) |
+| Firewall S2 — ufw (общий хост) | [shared/networking/iptables-s2.md](shared/networking/iptables-s2.md) |
 | Все порты (общий хост) | [shared/reference/ports.md](shared/reference/ports.md) |
 | Коммерческий проект | [commercial/overview.md](commercial/overview.md) |
 | Миграция на 3x-ui | [commercial/migration-3xui.md](commercial/migration-3xui.md) |

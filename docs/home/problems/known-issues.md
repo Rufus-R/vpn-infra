@@ -169,6 +169,8 @@ S1↔S2). Для 1194/udp добавлен недостающий DROP-catchall 
 
 Правила сохранены персистентно: `netfilter-persistent save`.
 
+> ⚠️ **Поправка 01.10.2026:** эта запись ошибочна — сохранение тогда фактически не работало (см. `system-state.md`, п.14). С 01.10.2026 firewall S2 — `ufw`.
+
 Актуальная итоговая таблица правил и техдолг (дубль MASQUERADE,
 пустой ip6tables): [../../shared/networking/iptables-s2.md](../../shared/networking/iptables-s2.md)
 

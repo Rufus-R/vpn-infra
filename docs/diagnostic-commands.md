@@ -29,10 +29,8 @@ grep CLIENT_LIST /var/log/openvpn-status-tun1.log | awk -F',' '{print $2, $4}'
 ping -c 2 -W 2 10.8.0.1
 ```
 
-**Ожидается:** пинг без потерь. ⚠️ После 29.09.2026 (S2 переключён на
-default DROP) этот тест может не работать, если ICMP-правило на S2 не
-сохранено персистентно — см. `shared/reference/ports.md`. Альтернатива:
-`dig @10.8.0.1 google.com` с S1 (проверяет TCP/UDP-доступность реально).
+**Ожидается:** пинг без потерь (ufw на S2 пропускает ICMP штатно, проверено 01.10.2026).
+Дополнительно: `dig @10.8.0.1 google.com` с S1 проверяет TCP/UDP-доступность реально.
 
 ### Маршрутизация
 
@@ -54,8 +52,8 @@ iptables -t nat -vnL POSTROUTING --line-numbers | head -10
 
 ## S2 (77.105.161.151) — выходной шлюз домашнего сегмента + 3x-ui нода
 
-⚠️ Docker полностью демонтирован (28.09.2026). Firewall переведён на
-default policy DROP (29.09.2026) — единообразно с S_RU/Panel.
+⚠️ Docker удалён (контейнеры 28.09.2026, пакеты 01.10.2026). Firewall — `ufw`
+(default deny, с 01.10.2026; до этого iptables DROP с 29.09.2026) — единообразно с S_RU/Panel.
 
 ### Системные сервисы
 
@@ -65,13 +63,13 @@ systemctl is-active openvpn-server@server pihole-FTL x-ui
 
 **Ожидается:** все три сервиса `active`.
 
-### Default policy firewall
+### Firewall (ufw)
 
 ```bash
-iptables -L INPUT -n | head -1
+ufw status verbose | head -4
 ```
 
-**Ожидается:** `policy DROP`.
+**Ожидается:** `Status: active`, `Default: deny (incoming), allow (outgoing), deny (routed)`.
 
 ### Ключевые порты (коммерческий проект — 3x-ui нода)
 
@@ -84,12 +82,11 @@ ss -tlnp | grep -E ':(10001|25307)\s'
 ### Фаервол: relay и управление нодой
 
 ```bash
-iptables -vnL INPUT --line-numbers | grep -E 'dpt:(10001|25307)\b'
+ufw status numbered | grep -E '10001|25307'
 ```
 
-**Ожидается:** ACCEPT только для конкретных IP (S1, Panel, S_RU для
-10001; S1, Panel, домашний LAN для 25307), DROP-catchall в конце
-каждой группы.
+**Ожидается:** ALLOW IN только для конкретных IP (S1, Panel, S_RU для 10001;
+S1, Panel, `46.32.82.242`, `10.8.0.0/24` для 25307); всё остальное закрыто default deny.
 
 ### Relay-канал: сквозной TCP-тест с S_RU
 
@@ -99,12 +96,12 @@ ssh root@31.77.169.67 "timeout 3 bash -c 'cat < /dev/null > /dev/tcp/77.105.161.
 
 **Ожидается:** `OK` — TCP-уровень доступен (⚠️ не гарантирует, что
 протокол Reality/VLESS реально доставляет данные — см.
-`migration-3xui.md`, открытая проблема relay-канала).
+`migration-3xui.md`; проблема relay-канала решена 30.09.2026).
 
 ### Pi-hole доступен через туннель
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' http://10.8.0.1/admin/login
+curl -s -o /dev/null -w '%{http_code}\n' http://10.8.0.1:8080/admin/login
 ```
 
 **Ожидается:** `200` или `301`/`302`.
@@ -133,6 +130,15 @@ ufw status numbered
 
 **Ожидается:** default deny, `22`/`443`/`80` открыты всем, `24167`
 ограничен списком доверенных IP.
+
+### Версия Xray и geo-split
+
+```bash
+/usr/local/x-ui/bin/xray-linux-amd64 version | head -1
+python3 -c "import json;r=json.load(open('/usr/local/x-ui/bin/config.json'))['routing'];print(r['domainStrategy']);[print(x) for x in r['rules']]"
+```
+
+**Ожидается:** `Xray 26.6.27` (⚠️ не обновлять); `IPIfNonMatch` и 5 правил, в т.ч. `geosite:category-ru` → direct и `geoip:ru` → direct.
 
 ### Исходящий доступ
 
@@ -197,12 +203,12 @@ certbot certificates
 
 ## Сквозная проверка коммерческого канала (с клиента)
 
-⚠️ **АКТУАЛЬНО НЕ РАБОТАЕТ** (обнаружено 29.09.2026) — v2rayNG и
-Hiddify оба не могут получить интернет через `S_RU→S2` relay при
-подтверждённо корректных Reality-ключах и работающем TCP/TLS-уровне.
-Диагностика в процессе, см. `commercial/migration-3xui.md`.
+✅ Работает (подтверждено 30.09 и 01.10.2026). Проверка с телефона через VPN (v2rayNG/Hiddify, fingerprint firefox, mux):
 
-Старая таблица ниже описывала Marzban-эпоху (geo-split RU/EU) —
-неактуальна для текущего стека 3x-ui, где geo-split пока не реализован.
-Актуальный ожидаемый путь (после починки): `клиент → S_RU:443 →
-S2:10001 → интернет`, без разделения по гео.
+| Сайт | Ожидаемый результат |
+|------|---------------------|
+| `https://2ip.io/ru/` | IP `77.105.161.151` (S2) |
+| `https://yandex.ru/internet`, `https://yandex.com/internet` | IP `31.77.169.67` (S_RU, direct по geo-split) |
+| YouTube, банки, Госуслуги | открываются |
+
+Путь: клиент → S_RU:443 → (RU direct | S2:10001 → интернет). Если RU-сайты показывают IP S2 — проверить routing S_RU (раздел «Версия Xray и geo-split» выше).
