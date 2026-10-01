@@ -52,7 +52,7 @@ Geo-split (RU direct / остальное через EU) на новом сте�
 | 12 | S2: default policy INPUT была ACCEPT (наследие Docker-эпохи) | 29.09.2026 | Переведено на DROP: добавлены explicit ACCEPT для `lo`, `ESTABLISHED,RELATED`, `22/tcp`; проверено — SSH, туннель S1↔S2, relay-канал 10001 не пострадали. Единообразие с S_RU/Panel (оба на `ufw` default-deny) |
 
 | 13 | Relay-канал S_RU→S2 не доставлял трафик реальных клиентов | 30.09.2026 | Баг Xray-core v26.9.9 на S_RU ломал распознавание Reality-хендшейка легитимного клиента; исправлено даунгрейдом до v26.6.27 через панель 3x-ui + клиентские настройки (mux, fingerprint=firefox для МегаФона, отдельный fingerprint для Hiddify). Подтверждено реальными тестами (МТС, МегаФон, Hiddify, YouTube). Подробности: [commercial/migration-3xui.md](commercial/migration-3xui.md) |
-| 14 | S2: firewall переведён на ufw; выявлено, что сохранение правил iptables НЕ работало | 01.10.2026 | `/etc/iptables/rules.v4` устарел с 27.09 (содержал 8443, `INPUT ACCEPT`), а плагинов netfilter-persistent не было — после ребута S2 остался бы без фильтра. Записи «персистентно» в п.10 и п.12 были ошибочными. Теперь: ufw (как на S_RU/Panel), правила в `/etc/ufw/user.rules`, NAT в `/etc/ufw/before.rules`, `netfilter-persistent`, `iptables-persistent` и Docker удалены. Ребут-тест НЕ выполнен. Подробности: [shared/networking/iptables-s2.md](shared/networking/iptables-s2.md) |
+| 14 | S2: firewall переведён на ufw; выявлено, что сохранение правил iptables НЕ работало | 01.10.2026 | `/etc/iptables/rules.v4` устарел с 27.09 (содержал 8443, `INPUT ACCEPT`), а плагинов netfilter-persistent не было — после ребута S2 остался бы без фильтра. Записи «персистентно» в п.10 и п.12 были ошибочными. Теперь: ufw (как на S_RU/Panel), правила в `/etc/ufw/user.rules`, NAT в `/etc/ufw/before.rules`, `netfilter-persistent`, `iptables-persistent` и Docker удалены. Ребут-тест пройден 01.10.2026 (18:37). Подробности: [shared/networking/iptables-s2.md](shared/networking/iptables-s2.md) |
 
 ## Монорепо
 
@@ -208,7 +208,7 @@ from geosite.dat`) — порт 443 не слушался ~10 минут. Отк
 - Временное ICMP-правило (техдолг п.11) больше не нужно: ufw пропускает ICMP штатно.
 
 **Открытые пункты (S2):**
-1. **Ребут-тест не выполнен.** Только он докажет автозапуск ufw/NAT/forward. Делать после того, как заработает консоль провайдера (login не принимает ввод; root-пароль для консоли задан 01.10.2026, SSH по паролю закрыт).
+1. ~~Ребут-тест~~ — пройден 01.10.2026 (18:37): ufw/NAT/forward/службы поднялись сами. Остаётся: консоль провайдера не принимает ввод (root-пароль задан, SSH по паролю закрыт) — аварийный путь только rescue-режим.
 2. **IP-сертификат для панели ноды 25307** (acme.sh, `shortlived`, ~6 дней): выпуск через `x-ui` меню → пункт 6, файлы в `/root/cert/ip/`. НЕ трогать `/etc/x-ui/certs/server.crt` (relay 10001, pin на S_RU; sha256 crt `6b0e75c3…c198e`). reloadcmd `systemctl restart x-ui` рвёт Xray и relay на секунды. «TLS skip verify» на мастере выключать только после проверки автообновления.
 3. **Инбаунд `testS2` (57651, reality)** оставлен для теста «клиент → S2 → интернет». `decryption` был `mlkem768x25519plus` (несовместим с Hiddify) — для теста поставить `none`. Порт в ufw открывать только на время теста.
 4. С `46.32.82.242` раз в минуту `TLS handshake error: unknown certificate` + `Unauthorized WebSocket` на 25307 (вероятно, открытая вкладка панели в браузере) — проверить; перепроверить и техдолг п.9.
