@@ -15,33 +15,28 @@ curl -sSL https://install.pi-hole.net | bash
 /var/log/pihole/                # Логи
 ```
 
-## Порты
+## Порты (проверено 01.10.2026)
 
-| Порт | Протокол | Bind | Защита |
-|------|----------|------|--------|
-| 53 | TCP/UDP | `0.0.0.0` | iptables: только `tun0` |
-| 80 | TCP | `0.0.0.0` | iptables: только `tun0` |
-| 443 | TCP | `0.0.0.0` | ⚠️ НЕ заблокирован в iptables |
-| 123 | UDP | `0.0.0.0` | ⚠️ НЕ заблокирован в iptables |
+| Порт | Протокол | Bind | Защита (ufw на S2) |
+|------|----------|------|--------------------|
+| 53 | TCP/UDP | `0.0.0.0`, `[::]` | только `10.8.0.0/24` (tun0) |
+| 8080 | TCP | `0.0.0.0` | веб-админка: `10.8.0.0/24`, `10.9.0.0/24`, `192.168.0.0/24` |
+| 123 | UDP | — | слушает (NTP Pi-hole), снаружи закрыт default deny; можно отключить |
 
-⚠️ **Pi-hole слушает на всех интерфейсах включая `ens3`!**
-Защита обеспечивается только iptables. При сбросе iptables Pi-hole
-станет open resolver и открытым web-сервером.
+Порты 80 и 443 на S2 свободны: веб Pi-hole перенесён на 8080, HTTPS отключён (01.10.2026).
+Порт 80 оставлен открытым под ACME (acme.sh / x-ui).
 
-Рекомендуется добавить блокировку:
-```bash
-iptables -A INPUT -i tun0 -p tcp --dport 443 -j ACCEPT
-iptables -A INPUT -p tcp --dport 443 -j DROP
-iptables -A INPUT -p udp --dport 123 -j DROP
-netfilter-persistent save
-```
+⚠️ **Pi-hole по-прежнему слушает на всех интерфейсах, включая `ens3`.**
+Защита — только firewall `ufw` (default deny incoming). Любое отключение ufw
+делает Pi-hole open resolver и открытым web-сервером. Правила и история:
+[../../shared/networking/iptables-s2.md](../../shared/networking/iptables-s2.md),
+порты: [../../shared/reference/ports.md](../../shared/reference/ports.md).
 
 ## Доступ
 
-- Web-интерфейс: `http://10.8.0.1/admin/login`
+- Web-интерфейс: `http://10.8.0.1:8080/admin/login`
 - DNS: `10.8.0.1:53`
-- Доступно **ТОЛЬКО через туннель** (из сети `10.8.0.0/24`)
-- Снаружи (`77.105.161.151`) — заблокировано iptables
+- Доступно **только через туннель**; снаружи (`77.105.161.151`) закрыто ufw
 
 ## Диагностика
 
@@ -50,11 +45,13 @@ netfilter-persistent save
 ss -tlnup | grep pihole
 systemctl status pihole-FTL
 pihole status
+ufw status numbered
 
 # Проверка доступности с S1 (через тоннель)
-curl -I http://10.8.0.1/admin/login
+curl -I http://10.8.0.1:8080/admin/login
+dig @10.8.0.1 google.com
 ```
 
 ## Статус
 
-**✅ Работает.** DNS работает, web-интерфейс доступен через тоннель.
+**✅ Работает.** DNS и web-интерфейс (8080) доступны через тоннель (проверено 01.10.2026).

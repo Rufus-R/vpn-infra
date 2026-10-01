@@ -39,6 +39,8 @@ Serafim, server, SET01, Vova, VovaL), подтверждено `ls -la` 26.09.20
 
 Расположение: `/root/vpn-infra-backup/s2/`
 
+> С 01.10.2026 firewall S2 — ufw: в бэкап включать `/etc/ufw/` (user.rules, before.rules, ufw.conf); файла `/etc/iptables/rules.v4` на S2 больше нет. Аварийный бэкап перед переходом: `/root/fw-backup-20261001-143917/` на S2.
+
 ```
 /root/vpn-infra-backup/s2/
 ├── server.conf

@@ -1,6 +1,6 @@
 # VPN Infrastructure — Документация
 
-## Последнее обновление: 28.09.2026
+## Последнее обновление: 01.10.2026
 
 ## Принципы организации документации
 
@@ -21,7 +21,7 @@
 
 ```
 docs/
-├── README.md, session-start.md, system-state.md, diagnostic-commands.md
+├── README.md, session-start.md, system-state.md, diagnostic-commands.md, next-session-todo.md (задачи на следующую сессию)
 ├── home/
 │   ├── architecture/overview.md
 │   ├── openvpn/{clients,s1-server,s2-server,s1-client-to-s2}.md
@@ -53,7 +53,7 @@ docs/
 | Коммерческий проект | [commercial/overview.md](commercial/overview.md) |
 | Миграция на 3x-ui | [commercial/migration-3xui.md](commercial/migration-3xui.md) |
 
-## Текущий статус (28.09.2026)
+## Текущий статус (01.10.2026)
 
 | Компонент | Статус |
 |-----------|--------|
@@ -62,4 +62,5 @@ docs/
 | S2 security (открытые порты 53/80/1194) | ✅ Исправлено 27.09.2026 |
 | MTProxy / relay-node (legacy) | ❌ Демонтированы (26.09, 28.09.2026) |
 | Коммерческий проект: Marzban | ❌ Полностью демонтирован (28.09.2026) |
-| Коммерческий проект: 3x-ui | 🔶 В процессе, базовый канал работает, geo-split не настроен |
+| Коммерческий проект: 3x-ui | ✅ Работает: канал и geo-split на S_RU подтверждены 30.09 и 01.10.2026; открыто: Telegram-бот, резервный канал |
+| Firewall S2 | ✅ ufw с 01.10.2026 (ребут-тест пройден) |
