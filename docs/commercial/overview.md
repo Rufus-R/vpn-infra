@@ -10,8 +10,8 @@
 серверный geo-split на S_RU настроен 01.10.2026.
 
 Не сделано: Telegram-бот под API 3x-ui, резервный канал S_RU↔S2, проверка iOS-клиентов
-(Shadowrocket/Streisand), IP-сертификат панели ноды S2 (25307), тест `testS2`.
-Полный список — [../next-session-todo.md](../next-session-todo.md) (пока файл существует) и раздел «Открытые вопросы» в `system-state.md`.
+(Shadowrocket/Streisand), тест `testS2`.
+Полный список — [../next-session-todo.md](../next-session-todo.md) и раздел «Открытые вопросы» в `system-state.md`.
 
 ## Принцип изоляции
 
@@ -68,6 +68,7 @@ S_RU (Xray, routing):
 
 - Panel: Let's Encrypt для `netru.ru.net` (certbot).
 - S_RU: IP-сертификат `31.77.169.67` (`acme.sh`, профиль `shortlived`, ~6 дней, HTTP-01 на 80/tcp). Продление перезапускает `x-ui` (Xray падает на секунды).
+- S2 панель ноды (25307): IP-сертификат Let's Encrypt (`acme.sh`, shortlived, с 02.10.2026, `/root/cert/ip/`); продление перезапускает `x-ui` и рвёт relay на секунды.
 - S2 relay: самоподписанный `/etc/x-ui/certs/server.crt`, на S_RU стоит pin (`pinnedPeerCertSha256`) — файл не менять.
 
 ## Принятые риски
