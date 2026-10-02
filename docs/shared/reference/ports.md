@@ -33,6 +33,7 @@ Firewall: `ufw` (default deny incoming / deny routed). Подробности и
 | 123 | UDP | pihole-FTL | закрыт (default deny) | NTP Pi-hole, снаружи не нужен |
 | 443 | TCP | — | — | Pi-hole HTTPS отключён оператором 01.10.2026 |
 | 1194 | UDP | openvpn | `194.55.236.229` (S1) | OpenVPN-туннель S1↔S2 |
+| 38417 | TCP | x-ui (socks5, `tg-proxy`) | только `31.77.173.218` (Panel) | Прокси для Telegram-бота и исходящего трафика Panel (`panelOutbound` = `tg-via-s2`); inbound создан в панели ноды S2 (мастер `mixed` для нод не создаёт), виден в мастере |
 | 10001 | TCP | xray (3x-ui нода) | S1, Panel `31.77.173.218`, S_RU `31.77.169.67` | Relay-канал коммерческого проекта (VLESS+TLS) |
 | 25307 | TCP | x-ui | S1, Panel, `46.32.82.242`, `10.8.0.0/24` | Управление 3x-ui нодой (HTTPS, IP-сертификат Let's Encrypt shortlived с 02.10.2026; для выпуска/продления нужен 80/tcp) |
 
