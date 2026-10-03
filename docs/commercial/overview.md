@@ -10,7 +10,7 @@
 серверный geo-split на S_RU настроен 01.10.2026.
 
 Не сделано: Telegram-бот под API 3x-ui, резервный канал S_RU↔S2, проверка iOS-клиентов
-(Shadowrocket/Streisand), тест `testS2`.
+(Shadowrocket/Streisand). Тест `testS2` (клиент → S2 напрямую) пройден 02.10.2026.
 Полный список — [../next-session-todo.md](../next-session-todo.md) и раздел «Открытые вопросы» в `system-state.md`.
 
 ## Принцип изоляции
