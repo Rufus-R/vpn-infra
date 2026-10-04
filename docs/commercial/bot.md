@@ -6,8 +6,11 @@
 
 ## Статус
 
-План, реализация не начата. Решения по архитектуре приняты оператором 03–04.10.2026 (см. ниже),
-открытые вопросы явно помечены.
+План, реализация не начата. Архитектурные решения приняты оператором 03–04.10.2026. API мастер-панели
+верифицирован 04.10.2026 реальными вызовами на боевой Panel (не только внешним исследованием) —
+все пункты B8 закрыты. Подтверждён критичный факт: `update` выполняет full-replace, не
+patch (обнуляет непереданные поля, включая отключение клиента) — см. правило использования
+в разделе «Интеграция с API Panel», пункт 5.
 
 ## Архитектурные решения (приняты 03–04.10.2026)
 
@@ -23,20 +26,21 @@
    `clients`, `client_inbounds` (many-to-many), `api_tokens` — централизованная модель клиентов,
    отличная от схемы «клиент живёт в JSON каждого inbound» в старых версиях x-ui. Мастер хранит
    клиента один раз и сам раздаёт/синхронизирует его на нужные ноды и инбаунды.
-   - ✅ **Исследовано 04.10.2026 (внешний поисковый агент, по открытым источникам GitHub)**,
-     ⚠️ **не проверено на боевой Panel** — см. раздел «Интеграция с API Panel» ниже и
-     `next-session-todo.md`, B8 (план верификации перед кодированием).
+   - ✅ **Верифицировано 04.10.2026 реальными вызовами на боевой Panel** — см. раздел
+     «Интеграция с API Panel» ниже. Чеклист из `next-session-todo.md` B8 в основном закрыт,
+     остался один критичный пункт (поведение `update`, см. ниже).
 4. **Множественные входы на клиента.** Таблица `client_inbounds` на Panel поддерживает
-   привязку одного клиента сразу к нескольким inbound (many-to-many). Решение оператора:
+   привязку одного клиента сразу к нескольким inbound (many-to-many, подтверждено практикой —
+   тестовый клиент создавался с `inboundIds` в одном вызове). Решение оператора:
    продакшн-клиенты бота должны получать **несколько входов** — основной (`reality-entry` на
    S_RU, geo-split) и **резервный прямой доступ к S2** (и, возможно, к будущим узлам) —
    но НЕ через диагностический `testS2` (там `decryption=none`, ослабленное шифрование).
    Нужен отдельный боевой инбаунд с полным шифрованием — задача `s2-direct-entry`
    (см. `next-session-todo.md`, статус: не начата, отдельная от бота задача).
 5. **Лимит устройств — через нативный `limit_ip` 3x-ui** (подтверждено оператором
-   04.10.2026), а не через создание N отдельных клиентов (как было в старой Marzban-схеме).
-   Тариф "N устройств" = один клиент с `limit_ip=N`, привязанный к нужным инбаундам.
-   Упрощает схему БД бота и работу с API.
+   04.10.2026 и практикой — поле `limitIp` в API, колонка `limit_ip` в БД), а не через создание
+   N отдельных клиентов (как было в старой Marzban-схеме). Тариф "N устройств" = один клиент
+   с `limit_ip=N`, привязанный к нужным инбаундам. Упрощает схему БД бота и работу с API.
 6. **Оплата.** Приоритет — **ЮKassa** (самозанятость, регистрация завершается оператором).
    Ручное подтверждение (перевод + кнопка «Я оплатил» + подтверждение админом) остаётся как
    fallback на время, пока ЮKassa не подключена, и как резерв на случай сбоя платёжного шлюза.
@@ -63,6 +67,10 @@
 
 ## Схема данных (обновлена под модель 3x-ui)
 
+⚠️ Таблица `users` в самой БД 3x-ui (`x-ui.db` на Panel) — это **админские аккаунты панели**
+(логины в веб-UI), не имеет отношения к пользователям бота ниже. У бота будет собственный
+файл SQLite, отдельный от `x-ui.db`, но имена сущностей совпадают — не путать при чтении схем.
+
 ```
 users
 ├── id (PK)
@@ -77,7 +85,7 @@ plans
 ├── id (PK)
 ├── name
 ├── duration_days
-├── device_count              -- используется как limit_ip при создании клиента (см. решение 5)
+├── device_count              -- используется как limitIp при создании клиента (см. решение 5)
 ├── price
 ├── discount_pct (nullable)   -- настраиваемая скидка, не хардкод
 
@@ -86,6 +94,7 @@ subscriptions
 ├── user_id (FK)
 ├── panel_client_email        -- идентификатор клиента на Panel (поле email таблицы clients)
 ├── panel_client_uuid         -- uuid клиента (для Reality/VLESS)
+├── panel_client_sub_id       -- subId клиента (для ссылки подписки / subLinks)
 ├── inbound_ids                -- JSON-список id инбаундов, к которым привязан клиент
 ├── plan_id (FK)
 ├── start_at
@@ -120,12 +129,12 @@ referral_bonuses
 1. Проверить `users.trial_used` по `tg_id`
 2. Запросить номер телефона (`request_contact`)
 3. Проверить `phone_number` на использование триала другим `tg_id`
-4. Если всё чисто — создать `subscription` (7 дней, 1 устройство → `limit_ip=1`, status=trial)
-5. Через API Panel создать клиента, привязать к боевым инбаундам (S_RU reality + резервный
-   S2, когда появится `s2-direct-entry`)
+4. Если всё чисто — создать `subscription` (7 дней, 1 устройство → `limitIp=1`, status=trial)
+5. Через API Panel создать клиента (`POST /panel/api/clients/add`), привязать к боевым инбаундам
+   (S_RU reality + резервный S2, когда появится `s2-direct-entry`)
 6. Выдать клиенту ссылку подписки — её формирует и отдаёт сама Panel
    (`https://netru.ru.net:2096/<токен>/<путь>`, пример структуры подтверждён практикой
-   оператора 03.10.2026)
+   оператора 03.10.2026); либо получить ссылки напрямую через `GET /panel/api/clients/subLinks/{subId}`
 7. `users.trial_used = true`
 
 ## Сценарий: покупка тарифа
@@ -134,7 +143,8 @@ referral_bonuses
 1. Клиент выбирает тариф → бот создаёт платёж через API ЮKassa, отправляет ссылку на оплату
 2. ЮKassa присылает webhook о статусе платежа на `/yookassa-webhook/<секрет>/`
 3. При успешной оплате — `payments.status=confirmed`, автоматически создаётся/продлевается
-   подписка (шаги 5–6 из сценария триала)
+   подписка (шаги 5–6 из сценария триала; продление — через `POST /panel/api/clients/bulkAdjust`
+   с `addDays`, см. раздел API ниже, не через `update`)
 4. Если есть `referrer_id` и это первая оплата пользователя → начислить бонус рефереру
    (таблица `tariffs.md`)
 5. Чек для самозанятых — через API ЮKassa или вручную (уточнить при реализации)
@@ -153,129 +163,230 @@ referral_bonuses
 
 ## Интеграция с API Panel (3x-ui v3.9.0)
 
-### Статус: исследовано 04.10.2026 через внешнего поискового агента (открытые источники GitHub) — ⚠️ НЕ ПРОВЕРЕНО на боевой Panel, см. `next-session-todo.md`, B8
+### Статус: исследовано 04.10.2026 внешним агентом (открытые источники GitHub) + **верифицировано в этой же сессии реальными вызовами на боевой Panel** (тестовый токен, тестовый клиент). Часть предположений внешнего агента подтвердилась, часть — опровергнута фактами ниже; используйте этот раздел как актуальный источник, не исходный ответ агента.
 
-Два слоя API, оба под `<webBasePath>/panel/api/...`:
+### Доступ и аутентификация (подтверждено практикой)
 
-**Legacy (inbound-centric):** `/panel/api/inbounds/*`
-- `GET /list`, `GET /get/:id`, `GET /getClientTraffics/:email`
-- `POST /addClient`, `POST /:id/delClient/:clientId`, `POST /updateClient/:clientId`
-- `POST /resetClientTraffic`, `/delDepletedClients`, `/clientIps`, `/clearClientIps`,
-  `/updateClientTraffic/:email`, `/delClientByEmail`
-- ⚠️ Известный баг (GitHub issue #3237, воспроизведён на версии 2.6.2, статус для 3.9.0 не
-  подтверждён — issue не закрыт): `addClient` не генерирует `subId` автоматически (остаётся
-  null), хотя создание через веб-UI генерирует нормально.
-- Пустой `inboundIds` в `addClient` = добавить клиента во все существующие inbound.
+- Аутентификация — Bearer-токен из таблицы `api_tokens` (`Authorization: Bearer <token>`),
+  подтверждено рабочим на всех протестированных вызовах.
+- ⚠️ **Создание токена через CLI не работает в нашей сборке.** Команда из исходного
+  исследования (`x-ui setting -getApiToken -tokenName <name>`) **не существует** — control
+  menu `x-ui -h` / `x-ui setting -h` не содержит подкоманды `setting` вообще (обе команды
+  проваливаются в одинаковый generic help). **Единственный проверенный способ создать токен —
+  через UI**: `Settings → Security → API Token`. Выбора `scope` (admin/monitor/node-sync,
+  как предполагал внешний агент) в UI нашей версии **нет** — токен создаётся с одним набором
+  прав (в БД записан `scope='admin'`).
+- `GET <webBasePath>panel/api/openapi.json` **без авторизации → 404** (подтверждено);
+  **с Bearer-токеном → 200**, отдаёт полную актуальную спецификацию (~254 KB). Это
+  авторитетный источник правды о реальных путях/схемах — предпочтительнее любого внешнего
+  описания API, расхождения с ним ниже отмечены явно.
+- Созданный тестовый токен сохранён на сервере Panel: `/root/.secrets/panel-api-token.txt`
+  (chmod 600, root only) — **не публиковать, не коммитить в репозиторий**. Снятая спецификация:
+  `/root/panel-openapi.json` на Panel (не секрет, можно коммитить при необходимости, но лучше
+  переснимать свежей при начале реализации — панель могла обновиться).
 
-**Modern (client-centric, новая модель v3.9.0):** `/panel/api/clients/*`
-- `POST /add` — создать клиента + привязать сразу к N inbound (поле `inboundIds`, массив,
-  часть одного запроса — отдельный вызов для multi-inbound не нужен при создании)
-- `POST /update/:email`, `DELETE /:email` (`?keepTraffic=1` — не удалять статистику)
-- `GET /:email` — данные клиента и трафик
-- `GET /subLinks/{subId}` — готовые ссылки подписки
-- `GET /panel/api/clients/list` — список ВСЕХ клиентов с пагинацией, фильтрами
-  (`expiryFrom`/`expiryTo`/`group`/`autoRenew` и т.п.) и готовой агрегированной сводкой
-  `summary` (`active`, `expiring`/`expiringCount`, `deactive`/`deactiveCount`, `depleted`,
-  `online`/`onlineCount`, `total`) — закрывает задачу периодической сверки просроченных
-  подписок без необходимости вручную перебирать все inbound (как пришлось бы в legacy API)
-- `POST /groups/bulkAdd`, `/groups/bulkRemove` — управление `group_name` (не передаётся
-  при создании клиента, только отдельными bulk-вызовами)
-- Bulk-привязка **существующих** клиентов к дополнительным inbound — отдельный bulk-эндпоинт
-  (для создания нового клиента это не нужно, см. выше)
-- В примерах ответов `subId` генерируется автоматически, но поведение build-зависимое —
-  **рекомендация:** передавать свой `subId` явно в payload, либо сразу после создания делать
-  `GET /:email` и забирать реальный `subId` из ответа
-- ⚠️ Известный баг (GitHub issue #5870, зафиксирован на версии 3.4.2, воспроизводится только
-  через API, не через веб-UI; статус для 3.9.0 не подтверждён — issue свежий, патч не найден):
-  `update` иногда создаёт дубликат клиента вместо обновления существующего.
-  **Рекомендация сообщества (используется сторонними обёртками):** вместо полного `update`
-  использовать `POST /panel/api/clients/bulkAdjust` — атомарная дельта (`addDays`/`addBytes`)
-  без риска дублирования, также автоматически снимает авто-отключение клиента из-за
-  исчерпания трафика. Обязательно проверить оба варианта на нашей сборке перед продом.
+### Два слоя API (подтверждена архитектура, legacy не тестировался подробно)
 
-**Тело запроса `POST /panel/api/clients/add` (пример):**
+- **Legacy (inbound-centric):** `/panel/api/inbounds/*` — не тестировался в этой сессии
+  (приоритет отдан modern API, как и планировалось архитектурно решением 3). Существование
+  подтверждено только по косвенным данным (упоминания в openapi.json не проверялись построчно).
+- **Modern (client-centric):** `/panel/api/clients/*` — полностью верифицирован ниже.
+
+### Полный список путей `/panel/api/clients/*` (получено из реального `openapi.json`, 04.10.2026)
+
+Список значительно шире, чем предполагалось в первой версии документации (со слов внешнего
+агента) — обнаружены пути, ранее не упоминавшиеся вовсе:
+
+```
+POST   /panel/api/clients/activeInbounds
+POST   /panel/api/clients/add
+POST   /panel/api/clients/bulkAdjust
+POST   /panel/api/clients/bulkAttach
+POST   /panel/api/clients/bulkCreate
+POST   /panel/api/clients/bulkDel
+POST   /panel/api/clients/bulkDetach
+POST   /panel/api/clients/bulkDisable
+POST   /panel/api/clients/bulkEnable
+POST   /panel/api/clients/bulkResetTraffic
+POST   /panel/api/clients/clearIps/{email}
+POST   /panel/api/clients/clientIpsByGuid
+POST   /panel/api/clients/del/{email}            -- ⚠️ POST, не DELETE (расходится с прежним описанием)
+POST   /panel/api/clients/delDepleted
+POST   /panel/api/clients/delOrphans
+GET    /panel/api/clients/export
+GET    /panel/api/clients/get/tgId/{tgId}
+GET    /panel/api/clients/get/{email}            -- ⚠️ путь "get/{email}", не "/{email}"
+GET    /panel/api/clients/groups
+POST   /panel/api/clients/groups/bulkAdd
+POST   /panel/api/clients/groups/bulkRemove
+POST   /panel/api/clients/groups/create
+POST   /panel/api/clients/groups/delete
+POST   /panel/api/clients/groups/rename
+POST   /panel/api/clients/groups/resetTraffic
+GET    /panel/api/clients/groups/{name}/emails
+POST   /panel/api/clients/happLink/{id}
+POST/DELETE /panel/api/clients/hwids/{email}
+DELETE /panel/api/clients/hwids/{email}/{id}
+POST   /panel/api/clients/import
+POST   /panel/api/clients/ips/{email}
+POST   /panel/api/clients/lastOnline
+GET    /panel/api/clients/links/{email}
+GET    /panel/api/clients/list                   -- плоский список, БЕЗ summary (см. ниже)
+GET    /panel/api/clients/list/paged             -- summary + пагинация + фильтры (см. ниже)
+POST   /panel/api/clients/onlines
+POST   /panel/api/clients/onlinesByGuid
+POST   /panel/api/clients/renewalPreview
+POST   /panel/api/clients/resetAllTraffics
+POST   /panel/api/clients/resetTraffic/{email}
+GET    /panel/api/clients/subLinks/{subId}
+GET    /panel/api/clients/traffic/{email}
+POST   /panel/api/clients/update/{email}
+POST   /panel/api/clients/updateTraffic/{email}
+POST   /panel/api/clients/{email}/attach
+POST   /panel/api/clients/{email}/detach
+POST   /panel/api/clients/{email}/externalLinks
+```
+
+### Проверенные вызовы (реальные тесты на боевой Panel, тестовый клиент id=7, email
+`test-bot-verify@internal`, привязан к инбаунду `testS2` id=3)
+
+**1. `POST /panel/api/clients/add` — ✅ подтверждено рабочим**
 ```json
 {
   "client": {
-    "email": "alice@example.com",
-    "totalGB": 53687091200,
-    "expiryTime": 1735689600000,
+    "email": "test-bot-verify@internal",
     "tgId": 0,
-    "limitIp": 0,
-    "limitHwid": 0,
+    "limitIp": 1,
+    "totalGB": 1073741824,
+    "expiryTime": 1791297771649,
     "enable": true,
-    "comment": "any text",
-    "subId": "custom_sub_id"
+    "comment": "..."
   },
-  "inboundIds": [3, 5]
+  "inboundIds": [3]
 }
 ```
-`uuid`, `password`, `flow` — опциональны, генерируются сервером, если не переданы.
+- Ответ: `{"success":true,"msg":"Inbound client(s) have been added.","obj":null}` — `obj` пуст,
+  данные созданного клиента нужно получать отдельным `GET`.
+- `subId` сгенерирован автоматически сервером, несмотря на то что явно не передавался —
+  **issue #3237 (subId не генерируется) НЕ воспроизведён** на modern `/clients/add` в нашей
+  версии (баг из исследования агента относился к legacy `addClient`, не проверялся там).
+- `tgId: 0` (JSON-число, не строка) принят и сохранён корректно — issue #5934 учтён и не
+  выстрелил, поведение ожидаемое.
+- `uuid`, `password` и т.п. сгенерированы сервером автоматически (не передавались).
 
-⚠️ **Критично:** `tgId` — всегда JSON-число (`int64` в Go-модели), НЕ строка. Передача
-`"tgId": "123456789"` в кавычках даёт ошибку API (`json: cannot unmarshal string into Go
-struct field Client.tgId of type int64`, подтверждено issue #5934 на версии 3.5.0). Если
-Telegram ID неизвестен — передавать `0`, не `""` и не `null`.
+**2. `GET /panel/api/clients/get/{email}` — ✅ подтверждено, структура ОТЛИЧАЕТСЯ от `/list`**
+- Путь: `get/{email}`, а не `/{email}`, как предполагалось изначально.
+- Ответ **вложенный**: `obj.client.*` (все поля клиента — `email`, `subId`, `uuid`, `limitIp`,
+  `tgId`, `enable`, `comment`, `expiryTime`, `totalGB`, `group`, `reset*`, `trafficReset*`,
+  `createdAt`, `updatedAt`, `reverse` и протокол-специфичные поля), плюс на уровне `obj` —
+  `externalLinks` (список), `inboundIds` (список id инбаундов клиента), `usedTraffic`.
+- ⚠️ Не путать со структурой `/list` (см. ниже) — там `obj` плоский список клиентов без
+  вложенности `.client`.
 
-**Аутентификация:**
-- Сессионные куки после обычного логина, ИЛИ
-- Bearer-токен (`Authorization: Bearer <token>`) из таблицы `api_tokens` — токены хранятся
-  как SHA-256 хэш, plaintext виден только при создании.
-- Создание токена: UI → Settings → Security → API Token; либо CLI на сервере Panel:
-  `x-ui setting -getApiToken -tokenName <name>`; либо API-вызов
-  `POST /panel/api/setting/apiTokens/create` (нужна уже существующая сессия/токен).
-- ⚠️ Коды ошибок (важно для отладки): неверный/отключённый токен → 401; отсутствие заголовка
-  `Authorization` и неверный `webBasePath` — оба маскируются под 404 (не путать причины).
+**3. `GET /panel/api/clients/list` — ✅ подтверждено, `obj` — ПЛОСКИЙ список, БЕЗ summary**
+- `obj` — массив полных объектов клиентов (включая `uuid`, `password`, `auth` и прочие
+  тяжёлые/чувствительные поля) напрямую, без обёртки `.client`.
+- **Summary (`active`/`expiring`/`deactive`/`depleted`/`online` счётчики) здесь ОТСУТСТВУЕТ** —
+  расхождение с первой версией документации (там summary ошибочно приписывался этому пути).
 
-**Swagger/OpenAPI:**
-- Встроенный Swagger UI в панели — пункт «API Docs» в сайдбаре.
-- Спецификация: `<panel-url>/panel/api/openapi.json` — ⚠️ по данным исследования, в свежих
-  релизах требует аутентифицированной сессии (раньше было публично, этим объясняется 404 при
-  пробном запросе без логина 02.10.2026, см. `migration-3xui.md`).
-- Исходник в репозитории 3x-ui: `frontend/public/openapi.json`.
+**4. `GET /panel/api/clients/list/paged` — ⚠️ схема изучена из openapi.json, САМ ВЫЗОВ НЕ
+ТЕСТИРОВАЛСЯ в этой сессии.** Именно этот эндпоинт — правильный источник для cron-сверки
+просроченных подписок бота:
+- Параметры: `page` (default 1), `pageSize` (default 25, max 200), `search` (substring по
+  email/subId/comment/uuid/password/auth/tgId), `filter` (CSV: `online`/`active`/`deactive`/
+  `depleted`/`expiring`, значения через ИЛИ), `protocol` (CSV), `inbound` (CSV id), `sort`
+  (`enable`/`email`/`inboundIds`/`traffic`/`remaining`/`expiryTime`/`createdAt`/`updatedAt`/
+  `lastOnline`), `order`.
+- Строки в ответе **урезанные** (без `uuid`/`password`/`auth`/`flow`/`security`/`reverse`/
+  `tgId`) — для полных данных конкретного клиента после пагинации нужен отдельный
+  `get/{email}`.
+- Содержит `summary`, вычисленный по всей БД (не только по текущей странице) — точные счётчики
+  по статусам, с ограничением в 200 email в сопутствующих массивах (не растёт с размером базы).
+- **TODO перед использованием в коде бота:** протестировать реальным вызовом (фильтр
+  `filter=expiring`, сверить с ручным расчётом по `expiryTime`).
 
-**Референс кода (открытые интеграции, ни одна не под modern API 1:1, но полезны):**
-- `iamhelitha/3xui-api-client` (Node/TS) — заявляет поддержку обеих моделей, есть метод
-  `addModernClient(data)` — лучший стартовый референс.
-- `S0R0SH/Sanaei-3xui-v2ray`, `digilolnet/client3xui` (Go), `mehdikhody/3x-ui-js` (TS),
-  `B14ckP4nd4/SanaeiApi` (PHP) — преимущественно обёртки вокруг legacy `/inbounds/*`.
+**5. `POST /panel/api/clients/update/{email}` — ⚠️ ПОДТВЕРЖДЕНО: FULL-REPLACE, НЕ PATCH (опасно для частичных изменений)**
+- Тело — **плоское**, без обёртки `client` (в отличие от `add`):
+  ```json
+  {"email": "test-bot-verify@internal", "comment": "..."}
+  ```
+  При отправке в обёртке `{"client": {...}}` (по аналогии с `add`) — ошибка:
+  `{"success":false,"msg":"Something went wrong (client email is required\n)","obj":null}`,
+  **HTTP 200** (не 400!) — подтверждает правило «проверять `success` в теле ответа, не
+  полагаться на HTTP-код».
+- Дублирования строки в БД при одиночном вызове не происходит (`count(*) where email=... = 1`
+  до и после) — **issue #5870 (дублирование) не воспроизведён** в этом сценарии.
+- 🔴 **ДОКАЗАНО КОНТРОЛИРУЕМЫМ ТЕСТОМ 04.10.2026 — `update` ПОЛНОСТЬЮ ЗАМЕНЯЕТ СТРОКУ КЛИЕНТА:**
+  1. Установлен baseline через `update` с полным телом: `limitIp=5`, `totalGB=2147483648`,
+     `enable=true`, `expiryTime=<+1 день>`. Подтверждено `GET get/{email}` — все значения
+     применились.
+  2. Выполнен `update` с **минимальным** телом `{"email":...,"comment":"..."}` (без остальных
+     полей).
+  3. `GET get/{email}` после — **все непереданные поля обнулились**: `limitIp:0`, `totalGB:0`,
+     `enable:False` (!), `expiryTime:0`. Сохранился только переданный `comment` и привязки
+     `inboundIds` (они живут в отдельной таблице `client_inbounds`, этим эндпоинтом не
+     затрагиваются).
+  - Это соответствует прямому предупреждению в самом `openapi.json`: *«Body is the JSON client
+    payload — supply the full set of fields you want to keep (the server replaces the row, it
+    does not patch)»* — теперь не гипотеза, а **подтверждённый на практике факт**.
+- 🔴 **ПРАВИЛО ДЛЯ КОДА БОТА (обязательно к соблюдению):**
+  - **Никогда не вызывать `update` с частичным телом** — это обнулит лимиты и **отключит
+    клиента** (`enable` падает в `false`), даже если `enable` не передавался вовсе.
+  - Если `update` всё же нужен — сначала `GET get/{email}`, взять **все** поля текущего
+    клиента, применить нужное изменение поверх полного набора, отправить обратно целиком.
+  - Для продления срока/трафика — **всегда использовать `bulkAdjust`** (addDays/addBytes),
+    не `update` — подтверждено безопасным (дельта, не замена).
+  - Для изменения `enable` — по возможности использовать `bulkEnable`/`bulkDisable` (есть в
+    списке путей, не тестировались в этой сессии) вместо `update`.
+  - Тестовый клиент после этого эксперимента остался в состоянии `enable:False`,
+    `limitIp:0`, `totalGB:0`, `expiryTime:0` — не продакшн-данные, не критично, но учитывать
+    при следующих тестах на этом же тестовом клиенте.
 
-**Формат ответа API (успех и ошибка):**
+**6. `POST /panel/api/clients/bulkAdjust` — ✅ подтверждено рабочим, рекомендованный способ
+продления подписок**
 ```json
-{ "success": true, "msg": "...", "obj": { ... } }
+{"emails": ["test-bot-verify@internal"], "addDays": 1}
 ```
-Поле `obj` — опциональные данные. ⚠️ Зафиксированы случаи (issue #3052/#3236, версии
-2.6.0–2.6.2), когда при ошибке API возвращает **пустую строку** вместо JSON — бот должен
-обрабатывать пустое тело ответа как отдельный failure-case, не как ошибку парсинга JSON.
-Проверять нужно и HTTP-статус, и тело: `success:false` в JSON — не единственный признак
-ошибки.
+- Ответ: `{"success":true,"msg":"","obj":{"adjusted":1}}`.
+- По описанию в openapi.json — атомарная дельта (addDays/addBytes могут быть отрицательными),
+  клиенты с `expiryTime=0`/`totalGB=0` (безлимит) пропускаются для соответствующего поля,
+  автоматически снимает авто-отключение клиента при выходе из состояния "исчерпан". Также
+  поддерживает `flow`, `limitHwid`, `adTag` одним вызовом на множество email сразу.
+- **Рекомендация для бота**: использовать `bulkAdjust` для продления/изменения трафика вместо
+  `update` — меньше риска (подтверждённое поведение, безопасная семантика "adjust", не
+  "replace").
 
-**Rate-limiting:** официального документированного лимита на `/panel/api/clients/*` не
-найдено. Единственное явное упоминание — лимит на **попытки логина** (через fail2ban);
-Bearer-токен (не сессия после логина) этот риск снимает полностью. **Рекомендации для бота:**
-- использовать Bearer-токен, не логин-сессию;
-- собственный throttling на стороне бота при всплесках (например, пачка одновременных
-  продлений после рекламной рассылки);
-- не отправлять параллельные `update`/`bulkAdjust` по одному и тому же `email` одновременно
-  (риск дублирования, см. issue #5870 выше).
+### Не протестировано в этой сессии (не блокирует старт разработки, кроме явно отмеченного)
 
-**Webhook/события — отсутствуют.** Подтверждено открытым feature request (список желаемых,
-но не реализованных событий: `client_created`, `client_expired`, `client_auto_renew`,
-`traffic_limit_reached` и др.). **Единственный вариант — periodic polling**: cron-задача бота
-должна вызывать `GET /panel/api/clients/list` с фильтром `expiryFrom`/`expiryTo` (или читать
-готовое поле `summary.expiring`/`summary.expiringCount`) и сравнивать с текущим временем.
+- ⚠️ **Блокирует безопасное использование `update` в проде**: полное сохранение остальных
+  полей клиента при частичном `update` (риск full-replace, см. пункт 5 выше).
+- `GET /panel/api/clients/list/paged` — реальный вызов с фильтрами/summary (нужно для cron
+  сверки подписок, план есть, вызов не делался).
+- `bulkCreate`, `bulkAttach`/`bulkDetach`, `bulkDel`, `bulkDisable`/`bulkEnable`,
+  `bulkResetTraffic`, `groups/*`, `hwids/*`, `happLink`, `export`/`import`, `renewalPreview`,
+  `onlines`/`onlinesByGuid`, `subLinks/{subId}` (сам вызов не делался, только подтверждено
+  наличие непустого `subId` у клиента).
+- Legacy `/panel/api/inbounds/*` — не тестировался вообще.
+- Webhook/события — по-прежнему предположительно отсутствуют (не предпринималось отдельной
+  проверки в этой сессии, но при просмотре полного списка путей `clients/*` никаких
+  webhook/event-эндпоинтов не обнаружено — косвенное подтверждение прежнего вывода).
 
-### Что осталось проверить на боевой Panel (не доверять слепо внешнему исследованию)
-См. `next-session-todo.md`, B8 — получить `openapi.json` с реальной панели, протестировать
-создание клиента через `/panel/api/clients/add` на тестовом email, сверить реальное поведение
-`subId` и multi-inbound с описанным выше; дополнительно — убедиться, что баги #3237 и #5870
-воспроизводятся/не воспроизводятся на установленной версии, проверить `GET
-/panel/api/clients/list` и сериализацию `tgId`.
+### Артефакты сессии на сервере Panel (сохранены, не удалять без необходимости)
+
+- `/root/.secrets/panel-api-token.txt` — тестовый Bearer-токен `test-bot-verify` (chmod 600).
+  **Решение оператора 04.10.2026: оставить до начала продакшн-разработки бота**, затем удалить
+  (создать отдельный продакшн-токен с собственным именем).
+- `/root/panel-openapi.json` — полная спецификация API, снята 04.10.2026 (254 KB). Переснять
+  перед началом кодирования, если пройдёт заметное время (панель могла обновиться).
+- Тестовый клиент: `email=test-bot-verify@internal`, `id=7` в таблице `clients`, привязан к
+  инбаунду `testS2` (id=3), `limitIp=1`. **Решение оператора: оставить** до начала
+  продакшн-разработки бота, затем удалить (`POST /panel/api/clients/del/test-bot-verify@internal`).
 
 ## Открытые вопросы (решить до начала реализации)
 
-1. ✅ Общая API-схема найдена 04.10.2026 (внешний агент) — см. раздел «Интеграция с API Panel».
-   Осталось: проверить на боевой Panel (получить openapi.json, тестовый вызов создания клиента).
+1. ✅ API-схема исследована 04.10.2026 (внешний агент) и **верифицирована в этой же сессии**
+   реальными вызовами на боевой Panel — см. раздел «Интеграция с API Panel». Остался один
+   критичный непроверенный момент: поведение `update` (полная замена строки vs patch, см. выше).
 2. Дождаться завершения регистрации ЮKassa (оператор завершает).
 3. Определить механизм long-polling бота через прокси (переиспользовать `tg-via-s2`
    инфраструктуру или завести отдельный socks5-outbound для бота).
