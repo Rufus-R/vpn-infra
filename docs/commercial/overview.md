@@ -1,6 +1,6 @@
 # Коммерческий VPN-проект — Обзор
 
-Актуально на 02.10.2026. Прежняя версия (Marzban, этап планирования, август–сентябрь 2026) —
+Актуально на 04.10.2026. Прежняя версия (Marzban, этап планирования, август–сентябрь 2026) —
 [archive/overview-marzban-20260925.md](archive/overview-marzban-20260925.md).
 Оперативный статус и журналы сессий — [migration-3xui.md](migration-3xui.md) и [../system-state.md](../system-state.md).
 
@@ -83,5 +83,5 @@ S_RU (Xray, routing):
 
 - [migration-3xui.md](migration-3xui.md) — миграция, журналы сессий, процедуры
 - [tariffs.md](tariffs.md) — тарифная сетка, триал, рефералка
-- [bot.md](bot.md) — схема БД бота, сценарии оплаты (проект под Marzban API, требует пересмотра)
+- [bot.md](bot.md) — схема БД бота под API 3x-ui, сценарии оплаты; реализация не начата, блокер — исследование API мастер-панели (`next-session-todo.md`, B8)
 - Архив Marzban-эпохи: [archive/overview-marzban-20260925.md](archive/overview-marzban-20260925.md), [archive/routing-marzban-20260925.md](archive/routing-marzban-20260925.md), [archive/deployment-marzban-20260925.md](archive/deployment-marzban-20260925.md), [archive/known-issues-marzban-20260925.md](archive/known-issues-marzban-20260925.md)
