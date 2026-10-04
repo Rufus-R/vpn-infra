@@ -26,6 +26,10 @@ cat /root/vpn-infra/docs/commercial/migration-3xui.md
 # Задачи на следующую сессию
 cat /root/vpn-infra/docs/next-session-todo.md
 
+# Коммерческий проект: Telegram-бот — схема, API 3x-ui, открытые вопросы (до завершения
+# реализации бота читать каждую сессию, пока актуален блокер B8)
+cat /root/vpn-infra/docs/commercial/bot.md
+
 # Коммерческий проект: архив Marzban-эпохи (для истории, при необходимости)
 ls /root/vpn-infra/docs/commercial/archive/
 ```
