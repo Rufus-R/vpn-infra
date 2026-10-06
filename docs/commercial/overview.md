@@ -1,6 +1,6 @@
 # Коммерческий VPN-проект — Обзор
 
-Актуально на 04.10.2026. Прежняя версия (Marzban, этап планирования, август–сентябрь 2026) —
+Актуально на 06.10.2026. Прежняя версия (Marzban, этап планирования, август–сентябрь 2026) —
 [archive/overview-marzban-20260925.md](archive/overview-marzban-20260925.md).
 Оперативный статус и журналы сессий — [migration-3xui.md](migration-3xui.md) и [../system-state.md](../system-state.md).
 
@@ -35,7 +35,7 @@
 ## Схема канала
 
 ```
-Клиент (v2rayNG / Hiddify)
+Клиент (Happ / V2Box / v2rayNG — ядро Xray-core)
   │  VLESS + Reality (SNI www.cloudflare.com), :443
   ▼
 S_RU (Xray, routing):
@@ -54,9 +54,14 @@ S_RU (Xray, routing):
 
 ## Клиенты и настройки
 
-- Android: v2rayNG, Hiddify. iOS (Shadowrocket, Streisand) — не проверялись.
+- Поддерживаются только клиенты на ядре **Xray-core** (REALITY на Xray ≥ v26.9.8 требует
+  `X25519MLKEM768` key share в ClientHello, которого нет в `sing-box`-based клиентах).
+- Рекомендуемые: **Happ** (iOS/Android/macOS/Windows/Linux — основной), V2Box, OneXray (iOS),
+  V2ray VPN Client: Xray Vless (Android), v2rayNG (Android, вне маркета, GitHub-релизы).
+- НЕ поддерживаются (ядро `sing-box`, несовместимость с REALITY): Hiddify, Shadowrocket,
+  Karing. Диагностика и источник — [migration-3xui.md](migration-3xui.md), «Сессия 06.10.2026».
 - Mux включён на клиенте (TCP+XUDP, concurrency 8).
-- TLS fingerprint: `firefox` — обязателен для МегаФона; в Hiddify fingerprint задаётся отдельно.
+- TLS fingerprint: `firefox` — обязателен для МегаФона.
 - Reality: dest/SNI `www.cloudflare.com` (SNI `ozon.ru`/`vk.com` блокировал МегаФон). Ключи Reality в документации не хранятся.
 
 ## Версии Xray (синхронизированы с 03.10.2026)
