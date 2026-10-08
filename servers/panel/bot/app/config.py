@@ -45,3 +45,16 @@ ADMIN_IDS = [int(x) for x in os.environ.get("ADMIN_IDS", "").split(",") if x.str
 # hostname verification не пройдёт. Риска MITM нет (трафик не покидает loopback),
 # поэтому по умолчанию проверка имени отключена для локального вызова.
 PANEL_API_VERIFY_TLS = os.environ.get("PANEL_API_VERIFY_TLS", "true").lower() == "true"
+
+# ID инбаунда reality-entry на S_RU, КАК ЕГО ВИДИТ МАСТЕР-ПАНЕЛЬ (не обязательно совпадает
+# с локальным ID на самом S_RU) — используется при создании клиентов (add_client).
+# Узнать: sqlite3 /etc/x-ui/x-ui.db "SELECT id, remark, tag FROM inbounds;" на Panel.
+_reality_inbound_id_raw = os.environ.get("REALITY_INBOUND_ID")
+REALITY_INBOUND_ID = int(_reality_inbound_id_raw) if _reality_inbound_id_raw else None
+
+# Базовый URL страницы подписки Panel (домен+порт+секретный subPath), БЕЗ subId в конце.
+# Полная ссылка клиенту = SUB_BASE_URL + subId. Путь secret — хранить только в
+# secrets/panel-bot.env, не коммитить в .env.example. Узнать актуальное значение:
+# sqlite3 /etc/x-ui/x-ui.db "SELECT key,value FROM settings WHERE key IN
+# ('subDomain','subPort','subPath');" на Panel.
+SUB_BASE_URL = os.environ.get("SUB_BASE_URL")

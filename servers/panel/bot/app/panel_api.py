@@ -4,8 +4,15 @@
 подтверждено контролируемым тестом 04.10.2026 (частичный update обнулил limitIp/totalGB/
 expiryTime и перевёл enable в False). Поэтому:
   - для продления срока/трафика использовать bulk_adjust(), НЕ update_client_safe()
+  - для смены enable — bulk_enable()/bulk_disable(), НЕ update_client_safe()
   - если изменение поля из update неизбежно — только через update_client_safe()
-    (get + merge + полная отправка), никогда напрямую частичным телом
+    (get + нормализация + merge + полная отправка), никогда напрямую частичным телом
+
+Дополнение 08.10.2026 (найдено при round-trip get -> update):
+  - поле `id` в ответе get — число; update не принимает это поле вовсе -> удаляется
+  - поле `allowedIPs` (WireGuard-specific) в ответе get — иногда пустая строка "",
+    а update ожидает []string -> конвертируется
+  См. bot.md, пункт 5a.
 """
 from __future__ import annotations
 import httpx
@@ -14,6 +21,21 @@ from app.config import PANEL_API_BASE, PANEL_API_TOKEN, PANEL_API_VERIFY_TLS
 
 class PanelApiError(RuntimeError):
     pass
+
+
+# Поля, которые GET отдаёт как "" (пустую строку), а update ожидает как []
+_EMPTY_STR_TO_LIST_FIELDS = ("allowedIPs",)
+
+
+def _normalize_for_update(client: dict) -> dict:
+    """Приводит объект client из GET к виду, который принимает update/{email}.
+    См. docs/commercial/bot.md, пункт 5a (находки 08.10.2026)."""
+    client = dict(client)  # не мутировать объект вызывающего кода
+    client.pop("id", None)
+    for field in _EMPTY_STR_TO_LIST_FIELDS:
+        if client.get(field) == "":
+            client[field] = []
+    return client
 
 
 class PanelApiClient:
@@ -57,6 +79,10 @@ class PanelApiClient:
         data = await self._call("GET", f"/clients/get/{email}")
         return data["obj"]
 
+    async def del_client(self, email: str) -> dict:
+        """⚠️ POST, не DELETE — подтверждено в bot.md."""
+        return await self._call("POST", f"/clients/del/{email}")
+
     async def bulk_adjust(self, emails: list[str], *, add_days: int | None = None,
                            add_bytes: int | None = None) -> dict:
         payload: dict = {"emails": emails}
@@ -66,13 +92,42 @@ class PanelApiClient:
             payload["addBytes"] = add_bytes
         return await self._call("POST", "/clients/bulkAdjust", json=payload)
 
+    async def bulk_enable(self, emails: list[str]) -> dict:
+        return await self._call("POST", "/clients/bulkEnable", json={"emails": emails})
+
+    async def bulk_disable(self, emails: list[str]) -> dict:
+        return await self._call("POST", "/clients/bulkDisable", json={"emails": emails})
+
     async def update_client_safe(self, email: str, **changes) -> dict:
-        """Безопасное частичное обновление: GET текущего клиента -> merge -> отправка
-        ПОЛНОГО набора полей. НЕ вызывать update/{email} с частичным телом напрямую."""
+        """Безопасное частичное обновление: GET текущего клиента -> нормализация
+        (id/allowedIPs) -> merge изменений -> отправка ПОЛНОГО набора полей.
+        НЕ вызывать update/{email} с частичным телом напрямую."""
         current = await self.get_client(email)
-        client = current["client"]
+        client = _normalize_for_update(current["client"])
         client.update(changes)
         return await self._call("POST", f"/clients/update/{email}", json=client)
 
     async def sub_links(self, sub_id: str) -> dict:
         return await self._call("GET", f"/clients/subLinks/{sub_id}")
+
+    async def list_clients_paged(self, *, page: int = 1, page_size: int = 25,
+                                  search: str | None = None, filter_: str | None = None,
+                                  protocol: str | None = None, inbound: str | None = None,
+                                  sort: str | None = None, order: str | None = None) -> dict:
+        """⚠️ Сам вызов НЕ тестировался на боевой Panel (bot.md, раздел 'Не протестировано').
+        Перед использованием в cron-сверке просроченных подписок — проверить реальным
+        вызовом с filter='expiring' и сверить с ручным расчётом по expiryTime."""
+        params: dict = {"page": page, "pageSize": page_size}
+        if search:
+            params["search"] = search
+        if filter_:
+            params["filter"] = filter_
+        if protocol:
+            params["protocol"] = protocol
+        if inbound:
+            params["inbound"] = inbound
+        if sort:
+            params["sort"] = sort
+        if order:
+            params["order"] = order
+        return await self._call("GET", "/clients/list/paged", params=params)
