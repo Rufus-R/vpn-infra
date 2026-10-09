@@ -30,6 +30,10 @@ class Plan(Base):
     device_count: Mapped[int] = mapped_column(Integer)  # -> limitIp при создании клиента
     price: Mapped[int] = mapped_column(Integer)  # в копейках
     discount_pct: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Добавлено 09.10.2026 для раздела "Тарифы" (UI-текст карточки). Существующая таблица
+    # "plans" на Panel не содержит эту колонку физически — добавляется идемпотентной
+    # dev-миграцией в db/base.py при старте (ALTER TABLE ... ADD COLUMN), до Alembic.
+    description: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
 class Subscription(Base):
@@ -44,7 +48,9 @@ class Subscription(Base):
     plan_id: Mapped[int] = mapped_column(ForeignKey("plans.id"))
     start_at: Mapped[dt.datetime] = mapped_column(DateTime)
     end_at: Mapped[dt.datetime] = mapped_column(DateTime)
-    status: Mapped[str] = mapped_column(String(16), default="trial")  # trial/active/expired
+    # trial/active/expired/pending_payment/rejected (свободная строка, без enum —
+    # см. комментарий в handlers/tariffs.py про fallback-оплату, 09.10.2026)
+    status: Mapped[str] = mapped_column(String(16), default="trial")
 
     user: Mapped[User] = relationship(back_populates="subscriptions")
 

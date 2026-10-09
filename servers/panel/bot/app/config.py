@@ -58,3 +58,12 @@ REALITY_INBOUND_ID = int(_reality_inbound_id_raw) if _reality_inbound_id_raw els
 # sqlite3 /etc/x-ui/x-ui.db "SELECT key,value FROM settings WHERE key IN
 # ('subDomain','subPort','subPath');" на Panel.
 SUB_BASE_URL = os.environ.get("SUB_BASE_URL")
+
+
+# Текст с реквизитами для fallback-оплаты (ручное подтверждение), показывается в
+# карточке тарифа. Не хардкод — задаётся в .env, можно менять без деплоя кода.
+PAYMENT_REQUISITES_TEXT = os.environ.get(
+    "PAYMENT_REQUISITES_TEXT",
+    "Реквизиты для оплаты временно не заданы — обратитесь к администратору через "
+    "раздел «Поддержка».",
+)

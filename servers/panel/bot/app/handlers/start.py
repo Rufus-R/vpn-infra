@@ -51,10 +51,10 @@ async def cmd_start(message: Message, command: CommandObject) -> None:
     )
 
 
-@router.callback_query(F.data == "menu:tariffs")
-async def cb_tariffs(callback: CallbackQuery) -> None:
+@router.callback_query(F.data == "menu:back")
+async def cb_back(callback: CallbackQuery) -> None:
     await callback.answer()
-    await callback.message.answer("Раздел «Тарифы» в разработке — скоро здесь появится выбор.")
+    await callback.message.answer("Выберите действие:", reply_markup=main_menu())
 
 
 @router.callback_query(F.data == "menu:subs")
