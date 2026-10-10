@@ -18,7 +18,10 @@ from app.config import ADMIN_IDS, PAYMENT_REQUISITES_TEXT, REALITY_INBOUND_ID, S
 from app.db.base import async_session
 from app.db.models import User, Plan, Subscription, Payment
 from app.db.seed import TRIAL_PLAN_NAME
-from app.keyboards import tariffs_menu, plan_detail_keyboard, admin_payment_keyboard
+from app.handlers.start import require_consent, CONSENT_TEXT
+from app.keyboards import (
+    tariffs_menu, plan_detail_keyboard, admin_payment_keyboard, consent_keyboard,
+)
 from app.panel_api import PanelApiClient, PanelApiError
 
 router = Router()
@@ -27,6 +30,10 @@ router = Router()
 @router.callback_query(F.data == "menu:tariffs")
 async def cb_tariffs(callback: CallbackQuery) -> None:
     await callback.answer()
+    user = await require_consent(callback.from_user.id)
+    if user is None:
+        await callback.message.answer(CONSENT_TEXT, reply_markup=consent_keyboard())
+        return
     async with async_session() as session:
         result = await session.execute(
             select(Plan)

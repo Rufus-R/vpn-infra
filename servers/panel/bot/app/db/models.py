@@ -11,10 +11,20 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     tg_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
+    # 10.10.2026: сбор номера телефона в сценарии триала убран (решение оператора —
+    # антифрод держится только на tg_id/trial_used, см. docs/commercial/overview.md,
+    # "Принятые риски"). Колонка оставлена в схеме на случай будущего сценария
+    # (например, доставка чека НПД при оплате без "Чеков от ЮKassa"), новым кодом
+    # не заполняется.
     phone_number: Mapped[str | None] = mapped_column(String(32), unique=True, nullable=True)
     username: Mapped[str | None] = mapped_column(String(64), nullable=True)
     referrer_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     trial_used: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Согласие на обработку ПДн (ст. 9 152-ФЗ) — фиксируется нажатием кнопки
+    # "Я согласен" при первом /start, см. app/handlers/start.py. До согласия
+    # пользователю недоступны разделы меню (require_consent).
+    privacy_accepted: Mapped[bool] = mapped_column(Boolean, default=False)
+    privacy_accepted_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)
 
     subscriptions: Mapped[list["Subscription"]] = relationship(back_populates="user")

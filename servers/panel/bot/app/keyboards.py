@@ -1,6 +1,18 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 
+def consent_keyboard() -> InlineKeyboardMarkup:
+    """Экран согласия на обработку ПДн — показывается до главного меню,
+    см. app/handlers/start.py, require_consent()."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Я согласен", callback_data="consent:accept")],
+        [InlineKeyboardButton(
+            text="📄 Политика конфиденциальности",
+            url="https://netru.ru.net/privacy",
+        )],
+    ])
+
+
 def main_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🎁 Попробовать бесплатно", callback_data="menu:trial")],
