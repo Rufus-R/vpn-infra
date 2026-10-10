@@ -6,5 +6,5 @@ TODO: заполнить актуальные команды под стек 3x-
 
 ⚠️ Старые команды для Marzban (`docker compose ps`, `docker exec marzban-marzban-1 ...`)
 неактуальны — Marzban полностью демонтирован 28.09.2026, см.
-`../migration-3xui.md`. Диагностика 3x-ui — через SQLite `/etc/x-ui/x-ui.db`
+`../operations-log.md`. Диагностика 3x-ui — через SQLite `/etc/x-ui/x-ui.db`
 или веб-UI, не через прямые файлы конфига (перезаписываются при reload).

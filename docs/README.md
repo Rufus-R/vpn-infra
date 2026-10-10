@@ -35,7 +35,7 @@ docs/
 │   ├── networking/iptables-s2.md
 │   └── reference/ports.md
 └── commercial/
-    ├── overview.md, migration-3xui.md, tariffs.md, bot.md
+    ├── overview.md, operations-log.md, tariffs.md, bot.md
     ├── reference/{commands,versions}.md (заглушки, TODO)
     └── archive/ (Marzban-эпоха)
 ```
@@ -51,7 +51,7 @@ docs/
 | Firewall S2 — ufw (общий хост) | [shared/networking/iptables-s2.md](shared/networking/iptables-s2.md) |
 | Все порты (общий хост) | [shared/reference/ports.md](shared/reference/ports.md) |
 | Коммерческий проект | [commercial/overview.md](commercial/overview.md) |
-| Миграция на 3x-ui | [commercial/migration-3xui.md](commercial/migration-3xui.md) |
+| Миграция на 3x-ui | [commercial/operations-log.md](commercial/operations-log.md) |
 
 ## Текущий статус (01.10.2026)
 

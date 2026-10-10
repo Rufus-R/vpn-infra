@@ -20,8 +20,8 @@ cat /root/vpn-infra/docs/home/architecture/overview.md
 # Коммерческий проект: обзор
 cat /root/vpn-infra/docs/commercial/overview.md
 
-# Коммерческий проект: статус миграции на 3x-ui (актуальный план)
-cat /root/vpn-infra/docs/commercial/migration-3xui.md
+# Коммерческий проект: операционный журнал (инциденты, процедуры, статус)
+cat /root/vpn-infra/docs/commercial/operations-log.md
 
 # Задачи на следующую сессию
 cat /root/vpn-infra/docs/next-session-todo.md

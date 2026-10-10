@@ -461,5 +461,5 @@ POST   /panel/api/clients/{email}/externalLinks
 ## Связанные документы
 
 - [overview.md](overview.md) — архитектура коммерческого проекта
-- [migration-3xui.md](migration-3xui.md) — журналы миграции и диагностики
+- [operations-log.md](operations-log.md) — журналы миграции и диагностики
 - [tariffs.md](tariffs.md) — тарифная сетка, триал, рефералка (цены частично не зафиксированы)

@@ -2,7 +2,7 @@
 
 Актуально на 08.10.2026. Прежняя версия (Marzban, этап планирования, август–сентябрь 2026) —
 [archive/overview-marzban-20260925.md](archive/overview-marzban-20260925.md).
-Оперативный статус и журналы сессий — [migration-3xui.md](migration-3xui.md) и [../system-state.md](../system-state.md).
+Оперативный статус и журналы сессий — [operations-log.md](operations-log.md) и [../system-state.md](../system-state.md).
 
 ## Статус
 
@@ -57,7 +57,7 @@ S_RU (Xray, routing):
 - Шаблон Xray на S_RU: `domainStrategy: IPIfNonMatch`; правила — api → api, `geoip:private` → blocked, bittorrent → blocked, `geosite:category-ru` → direct, `geoip:ru` → direct.
 - Тег RU-доменов — `geosite:category-ru`; `geosite:ru` недопустим (категории `RU` в `geosite.dat` нет).
 - Компромисс: RU-сервисы видят IP дата-центра S_RU, а не IP клиента (банки и Госуслуги при проверке 01.10 работают). Запасной вариант — клиентский geo-split через JSON-подписку Panel.
-- Детали, процедура отката и тесты — [migration-3xui.md](migration-3xui.md), «Сессия 01.10.2026».
+- Детали, процедура отката и тесты — [operations-log.md](operations-log.md), «Сессия 01.10.2026».
 
 ## Клиенты и настройки
 
@@ -66,7 +66,7 @@ S_RU (Xray, routing):
 - Рекомендуемые: **Happ** (iOS/Android/macOS/Windows/Linux — основной), V2Box, OneXray (iOS),
   V2ray VPN Client: Xray Vless (Android), v2rayNG (Android, вне маркета, GitHub-релизы).
 - НЕ поддерживаются (ядро `sing-box`, несовместимость с REALITY): Hiddify, Shadowrocket,
-  Karing. Диагностика и источник — [migration-3xui.md](migration-3xui.md), «Сессия 06.10.2026».
+  Karing. Диагностика и источник — [operations-log.md](operations-log.md), «Сессия 06.10.2026».
 - Mux включён на клиенте (TCP+XUDP, concurrency 8).
 - TLS fingerprint: `firefox` — обязателен для МегаФона.
 - Reality: dest/SNI `www.cloudflare.com` (SNI `ozon.ru`/`vk.com` блокировал МегаФон). Ключи Reality в документации не хранятся.
@@ -93,7 +93,7 @@ S_RU (Xray, routing):
 
 ## Связанные документы
 
-- [migration-3xui.md](migration-3xui.md) — миграция, журналы сессий, процедуры
+- [operations-log.md](operations-log.md) — миграция, журналы сессий, процедуры
 - [tariffs.md](tariffs.md) — тарифная сетка, триал, рефералка
 - [bot.md](bot.md) — схема БД бота под API 3x-ui, сценарии оплаты; реализация не начата, блокер — исследование API мастер-панели (`next-session-todo.md`, B8)
 - Архив Marzban-эпохи: [archive/overview-marzban-20260925.md](archive/overview-marzban-20260925.md), [archive/routing-marzban-20260925.md](archive/routing-marzban-20260925.md), [archive/deployment-marzban-20260925.md](archive/deployment-marzban-20260925.md), [archive/known-issues-marzban-20260925.md](archive/known-issues-marzban-20260925.md)
