@@ -1,12 +1,24 @@
-"""Раздел «Тарифы» + fallback-оплата (ручное подтверждение админом).
-См. docs/commercial/bot.md, 'Сценарий: покупка тарифа' (fallback-путь).
+"""Раздел «Тарифы».
 
-MVP 09.10.2026: только fallback, ЮKassa не подключена (регистрация завершена,
-интеграция — следующий этап). Реквизиты — PAYMENT_REQUISITES_TEXT (.env, не хардкод).
+🔴 11.10.2026 (решение оператора): приём платежей возможен ТОЛЬКО через ЮKassa
+с автоматическим чеком. Ручной fallback (перевод + подтверждение админом без чека)
+ПОЛНОСТЬЮ ОТКЛЮЧЁН как принцип, не как временная мера — процедура "выдавать чек
+вручную через Мой налог для fallback-платежей" исключена оператором.
 
-Subscription.status временно используется как свободная строка для состояния заявки
-(pending_payment/rejected/active) — без схемных изменений, т.к. это MVP до появления
-полноценной модели заказов.
+Кнопка «💳 Оформить заказ» в карточке тарифа ОСТАВЛЕНА в интерфейсе: нужна для
+скриншотов в заявке на подключение приёма платежей в мессенджере (форма ЮKassa
+требует показать "товары/услуги с ценами" и "кнопки оформления заказа" в уже
+работающем, открытом для всех боте). При нажатии она больше НЕ создаёт
+Payment/Subscription и не уведомляет админа — только сообщает пользователю,
+что онлайн-оплата скоро заработает, и предлагает бесплатный триал.
+
+Хендлеры admin:confirm:/admin:reject: НЕ удалены из файла — они написаны так,
+что идентичны будущему обработчику вебхука ЮKassa (тот же блок add_client ->
+get_client -> sub_url при переходе payment.status в confirmed), оставлены для
+минимизации диффа при интеграции. Сейчас недостижимы: ни один Payment со
+статусом pending через бота больше не создаётся.
+
+См. docs/commercial/bot.md, раздел "Сценарий: покупка тарифа".
 """
 import datetime as dt
 
@@ -14,14 +26,12 @@ from aiogram import Router, F
 from aiogram.types import CallbackQuery
 from sqlalchemy import select
 
-from app.config import ADMIN_IDS, PAYMENT_REQUISITES_TEXT, REALITY_INBOUND_ID, SUB_BASE_URL
+from app.config import ADMIN_IDS, REALITY_INBOUND_ID, SUB_BASE_URL
 from app.db.base import async_session
 from app.db.models import User, Plan, Subscription, Payment
 from app.db.seed import TRIAL_PLAN_NAME
 from app.handlers.start import require_consent, CONSENT_TEXT
-from app.keyboards import (
-    tariffs_menu, plan_detail_keyboard, admin_payment_keyboard, consent_keyboard,
-)
+from app.keyboards import tariffs_menu, plan_detail_keyboard, consent_keyboard
 from app.panel_api import PanelApiClient, PanelApiError
 
 router = Router()
@@ -62,89 +72,30 @@ async def cb_plan_detail(callback: CallbackQuery) -> None:
         f"{plan.description or ''}\n\n"
         f"Стоимость: {price_rub} ₽ / {plan.duration_days} дн.\n"
         f"Устройств: {plan.device_count}\n\n"
-        f"{PAYMENT_REQUISITES_TEXT}\n\n"
-        "После перевода нажмите «✅ Я оплатил» — заявка уйдёт администратору "
-        "на подтверждение."
+        "Онлайн-оплата через ЮKassa (с автоматическим чеком) подключается — "
+        "совсем скоро можно будет оформить заказ прямо здесь."
     )
     await callback.message.answer(text, reply_markup=plan_detail_keyboard(plan.id), parse_mode="HTML")
 
 
 @router.callback_query(F.data.startswith("plan:paid:"))
-async def cb_plan_paid(callback: CallbackQuery) -> None:
-    """Пользователь нажал «Я оплатил» — создаём pending-заявку, уведомляем админов.
-    Реальное списание/проверка платежа не производится (fallback, ручное подтверждение)."""
+async def cb_plan_order(callback: CallbackQuery) -> None:
+    """Кнопка «💳 Оформить заказ». 11.10.2026: приём платежей вне ЮKassa отключён —
+    см. предупреждение в шапке файла. Эта функция больше не создаёт заявку на оплату."""
     await callback.answer()
-    plan_id = int(callback.data.removeprefix("plan:paid:"))
-    tg_id = callback.from_user.id
-
-    async with async_session() as session:
-        result = await session.execute(select(User).where(User.tg_id == tg_id))
-        user = result.scalar_one_or_none()
-        if user is None:
-            await callback.message.answer("Сначала отправьте /start.")
-            return
-
-        plan = await session.get(Plan, plan_id)
-        if plan is None:
-            await callback.message.answer("Тариф не найден.")
-            return
-
-        now = dt.datetime.utcnow()
-        placeholder_email = f"pending-tg{tg_id}-{int(now.timestamp() * 1000)}@netru.bot"
-
-        subscription = Subscription(
-            user_id=user.id,
-            panel_client_email=placeholder_email,
-            panel_client_uuid=None,
-            panel_client_sub_id=None,
-            inbound_ids=[],
-            plan_id=plan.id,
-            start_at=now,
-            end_at=now,
-            status="pending_payment",
-        )
-        session.add(subscription)
-        await session.flush()  # получить subscription.id до commit
-
-        payment = Payment(
-            user_id=user.id,
-            subscription_id=subscription.id,
-            amount=plan.price,
-            provider="manual",
-            status="pending",
-        )
-        session.add(payment)
-        await session.commit()
-        await session.refresh(payment)
-
-        payment_id = payment.id
-        plan_name = plan.name
-        plan_price = plan.price
-
     await callback.message.answer(
-        "Заявка на оплату отправлена администратору. Как только оплата будет "
-        "подтверждена, вы получите ссылку на подписку."
+        "Онлайн-оплата временно недоступна — мы подключаем приём платежей через "
+        "ЮKassa с автоматическим чеком. Совсем скоро можно будет оформить заказ "
+        "прямо здесь.\n\n"
+        "А пока доступен бесплатный пробный период — кнопка «🎁 Попробовать "
+        "бесплатно» в главном меню."
     )
-
-    admin_text = (
-        f"🆕 Заявка на оплату (fallback)\n"
-        f"Пользователь: tg_id={tg_id} (@{callback.from_user.username or '-'})\n"
-        f"Тариф: {plan_name}\n"
-        f"Сумма: {plan_price // 100} ₽\n"
-        f"Payment ID: {payment_id}"
-    )
-    for admin_id in ADMIN_IDS:
-        try:
-            await callback.bot.send_message(
-                admin_id, admin_text, reply_markup=admin_payment_keyboard(payment_id)
-            )
-        except Exception:
-            # Не роняем обработчик, если конкретный админ недоступен/заблокировал бота
-            pass
 
 
 @router.callback_query(F.data.startswith("admin:confirm:"))
 async def cb_admin_confirm(callback: CallbackQuery) -> None:
+    # 11.10.2026: недостижимо из текущего кода бота (fallback отключён), оставлено
+    # для переиспользования после интеграции вебхука ЮKassa — см. шапку файла.
     if callback.from_user.id not in ADMIN_IDS:
         await callback.answer("Недостаточно прав.", show_alert=True)
         return
@@ -225,6 +176,7 @@ async def cb_admin_confirm(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data.startswith("admin:reject:"))
 async def cb_admin_reject(callback: CallbackQuery) -> None:
+    # 11.10.2026: недостижимо из текущего кода бота (fallback отключён), см. шапку файла.
     if callback.from_user.id not in ADMIN_IDS:
         await callback.answer("Недостаточно прав.", show_alert=True)
         return
