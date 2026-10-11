@@ -88,3 +88,30 @@ class ReferralBonus(Base):
     referred_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     bonus_days: Mapped[int] = mapped_column(Integer)
     granted_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)
+
+
+class SupportMessage(Base):
+    """Раздел «Поддержка» — см. docs/commercial/bot.md, 'Сценарий: поддержка'.
+    direction='user': копия сообщения пользователя, разосланная ОДНОМУ конкретному
+    админу (admin_tg_id/admin_message_id — чтобы поймать его Reply). При нескольких
+    ADMIN_IDS на одно обращение создаётся несколько строк (по одной на админа),
+    сгруппированных полем source_message_id (message_id ОРИГИНАЛЬНОГО сообщения
+    пользователя, не пересланной копии) — пара (user_id, source_message_id)
+    однозначно идентифицирует "тред" обращения.
+    direction='admin': ответ админа, переслан пользователю (для истории/аудита,
+    admin_tg_id/admin_message_id/source_message_id не используются).
+    answered: при ответе ЛЮБОГО админа помечаются True ВСЕ строки треда (не только
+    та, на которую был Reply) — остальным админам редактируется их копия сообщения
+    с пометкой "уже отвечено", чтобы снизить риск дублирующего ответа (не исключает
+    полностью гонку при одновременном ответе двух админов, см. bot.md)."""
+    __tablename__ = "support_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    direction: Mapped[str] = mapped_column(String(8))
+    body: Mapped[str] = mapped_column(String(4096))
+    source_message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    admin_tg_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    admin_message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    answered: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)

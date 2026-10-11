@@ -212,3 +212,32 @@ certbot certificates
 | YouTube, банки, Госуслуги | открываются |
 
 Путь: клиент → S_RU:443 → (RU direct | S2:10001 → интернет). Если RU-сайты показывают IP S2 — проверить routing S_RU (раздел «Версия Xray и geo-split» выше).
+
+## Panel: sqlite3 CLI отсутствует — использовать python3
+
+Обнаружено 11.10.2026: на Panel (`31.77.173.218`) нет системного пакета `sqlite3`
+(CLI-клиент), хотя Python-драйвер `sqlite3` (стандартная библиотека) доступен.
+Команда `sqlite3 <файл> '<SQL>'` вернёт `bash: sqlite3: command not found`.
+
+Рабочая замена для read-only диагностики `bot.db` (и, возможно, `x-ui.db` на этом же
+сервере — не проверялось явно):
+
+```bash
+python3 -c "import sqlite3; c=sqlite3.connect('/opt/netru-bot/bot.db'); \
+print(c.execute(\"SELECT sql FROM sqlite_master WHERE name='<таблица>'\").fetchone())"
+```
+
+Для произвольного SELECT с несколькими строками:
+
+```bash
+python3 -c "
+import sqlite3
+c = sqlite3.connect('/opt/netru-bot/bot.db')
+for row in c.execute('SELECT * FROM support_messages LIMIT 10'):
+    print(row)
+"
+```
+
+Не устанавливать `sqlite3` через `apt` без необходимости — ресурсы Panel ограничены
+(553 MiB RAM, см. `system-state.md`), а read-only диагностика через `python3`
+полностью покрывает потребность.
