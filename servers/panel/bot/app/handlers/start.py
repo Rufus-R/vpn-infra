@@ -103,16 +103,6 @@ async def cb_back(callback: CallbackQuery) -> None:
     await callback.message.answer("Выберите действие:", reply_markup=main_menu())
 
 
-@router.callback_query(F.data == "menu:subs")
-async def cb_subs(callback: CallbackQuery) -> None:
-    await callback.answer()
-    user = await require_consent(callback.from_user.id)
-    if user is None:
-        await callback.message.answer(CONSENT_TEXT, reply_markup=consent_keyboard())
-        return
-    await callback.message.answer("Раздел «Мои подписки» в разработке.")
-
-
 @router.callback_query(F.data == "menu:ref")
 async def cb_ref(callback: CallbackQuery) -> None:
     await callback.answer()

@@ -53,3 +53,11 @@ def admin_payment_keyboard(payment_id: int) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="❌ Отклонить", callback_data=f"admin:reject:{payment_id}"),
         ],
     ])
+
+
+def subscriptions_keyboard(links: list[tuple[str, str]]) -> InlineKeyboardMarkup:
+    """Раздел «Мои подписки» — URL-кнопка на каждую активную подписку (если удалось
+    получить subId), плюс «Назад» в любом случае."""
+    rows = [[InlineKeyboardButton(text=f"🔗 Открыть: {name}", url=url)] for name, url in links]
+    rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:back")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
