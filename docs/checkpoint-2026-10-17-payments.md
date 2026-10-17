@@ -1,0 +1,79 @@
+# Чекпоинт 17.10.2026 (вечер) — платёжная схема: ЮKassa + чеки «Мой налог»
+
+Самодостаточная запись: свежая сессия может продолжить с неё без переписки. Предыдущий чекпоинт
+(синхронизация документации) выполнен: `checkpoint-2026-10-17-docs-sync.md`, раздел 9.
+
+## 1. Решения оператора
+
+- Платежи — только ЮKassa. Platega и другие провайдеры не рассматриваются; разделение приёма
+  платежей на «официальный» и «неофициальный» не делаем (ассистент в этом не помогает: доход
+  остаётся доходом владельца сервиса независимо от вывески).
+- Чеки — через API «Мой налог» с подтверждением админа: оплата ЮKassa → вебхук → бот перепроверяет
+  платёж запросом к API ЮKassa → бот формирует черновик чека и отправляет админу → админ нажимает
+  «Отправить в налоговую» → бот вызывает API, получает ссылку на чек и отправляет её пользователю.
+- Оператор сообщил, что в приложении «Мой налог» можно создать «ключ доступа». Что это за функция и
+  подходит ли она для API — НЕ подтверждено: поиск 17.10 нашёл только неофициальные клиенты
+  `lknpd.nalog.ru` (вход по ИНН и паролю либо по телефону/SMS, refresh-токен), официального ключа
+  не найдено. Уточнить у оператора название экрана. Секрет в чат не вставлять.
+
+## 2. Факты о коде (проверено 17.10.2026)
+
+- `servers/panel/bot/app/`: `config.py` (69 строк), `db/models.py` (117), `db/base.py` (30,
+  `create_all`), `handlers/tariffs.py` (207), `handlers/support.py` (206), `keyboards.py` (63),
+  `main.py` (28), `panel_api.py` (133), `requirements.txt` (7 строк: есть `aiohttp-socks`).
+- Хендлеры `admin:confirm:` (tariffs.py:95) и `admin:reject:` (tariffs.py:177) недостижимы, кнопки
+  в `keyboards.py:52-53`; остались от отключённой fallback-оплаты.
+- `payments`: id, user_id, subscription_id, amount (копейки), provider VARCHAR(16),
+  provider_payment_id, status VARCHAR(16), created_at. Полей чека нет. `Plan.price` — в копейках
+  (`seed.py`: `price_rub * 100`). В чек идут рубли.
+- Имена настроек в `config.py`: ADMIN_IDS, BOT_TOKEN, DB_PATH, PANEL_API_BASE, PANEL_API_TOKEN,
+  PANEL_API_TOKEN_FILE, PANEL_API_VERIFY_TLS, PAYMENT_REQUISITES_TEXT (мёртвая), REALITY_INBOUND_ID,
+  SUB_BASE_URL, TG_PROXY_URL.
+- Запись в `bot.db` на новом Panel подтверждена 17.10 (тест «Поддержка», `support_messages` = 10,
+  `journal_mode = delete`).
+
+## 3. Проект (не реализовано)
+
+- Отдельная таблица `receipts`: `payment_id` (UNIQUE), `status`, `amount` (копейки), `service_name`,
+  `receipt_uuid`, `receipt_url`, `error`, `created_at`, `sent_at`.
+- Статусы: `pending_review`, `sending`, `sent`, `failed`, `unknown`, `rejected`, `cancelled`.
+- Интерфейс `ReceiptProvider`: реализация `LknpdReceipt` (API) и всегда доступный запасной путь —
+  админ вставляет ссылку на чек вручную.
+- Идемпотентность: один платёж — один чек; перед вызовом API статус атомарно переводится в `sending`.
+- Неопределённый результат (таймаут после отправки) — автоматически не повторять: статус `unknown`,
+  админ сверяет в «Мой налог».
+- Отмена чека по кнопке админа (возвраты); не проверено на практике.
+- Секреты «Мой налог» и ЮKassa — в `.env` на Panel (права 600), не в git, не в логах; при протухшем
+  токене — уведомление админу, платёж и подписка от чека не зависят.
+- Кнопки: `receipt:send:{id}`, `receipt:reject:{id}`, отдельно от старых `admin:*`.
+
+## 4. План
+
+0. Бэкап `bot.db` (на Panel). Перед правками сверить `WorkingDirectory` юнита и `DB_PATH`
+   (правило `next-session-todo.md`, раздел 6). Alembic: базовая ревизия на текущую схему.
+1. Миграция `receipts`; новые настройки (ЮKassa, «Мой налог»).
+2. ЮKassa: `create_payment` с ключом идемпотентности; вебхук (aiohttp, секретный путь в nginx,
+   порт-кандидат 8711 — проверить свободен ли); перепроверка платежа запросом к API ЮKassa; продление
+   через `bulkAdjust` (`update/{email}` — full-replace).
+3. Уведомление админу с черновиком чека и кнопками; ручной ввод ссылки.
+4. Клиент «Мой налог» (после уточнения способа входа); тест на минимальной сумме; тестовый магазин
+   ЮKassa.
+5. Оферта п.4.4 (`/root/commercial-legal/` на S1, вне git); срок выдачи чека — проверить у бухгалтера
+   или в «Мой налог» и настроить напоминание; обновить `bot.md`, `next-session-todo.md` (2.1).
+
+## 5. Открыто
+
+- Что такое «ключ доступа» в «Мой налог» (раздел 1).
+- Срок выдачи чека самозанятым для платежей онлайн.
+- Тестовый магазин ЮKassa: данные у оператора.
+- Оферта п.4.4 — формулировка про чеки.
+- Остальное по срокам: `next-session-todo.md` (отказ от старого Panel до 25.10, DNSSEC).
+
+## 6. Первые команды новой сессии (только чтение)
+
+```bash
+cd /root/vpn-infra && cat docs/checkpoint-2026-10-17-payments.md && cd servers/panel/bot \
+ && cat app/db/models.py app/db/base.py app/main.py requirements.txt
+ssh -n root@31.77.78.144 "systemctl cat netru-bot | grep -E 'WorkingDirectory|ExecStart'; \
+ grep DB_PATH /opt/netru-bot/src/.env; /opt/netru-bot/venv/bin/pip list 2>/dev/null | grep -i -E 'alembic|aiogram|aiohttp|sqlalchemy'"
+```
