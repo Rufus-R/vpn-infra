@@ -123,3 +123,13 @@
 - Шаг 8: `git status`, push в origin; судьба `tmp/`, `.bak-2026-10-16`, `/root/x-ui-restored.db` — по решению оператора.
 
 Наблюдения сессии: «слипшиеся» строки в выводе (`bot.md` «(см. ниже).2.», «ЮKass  (») оказались артефактом вставки в чат, в файлах дефекта нет. Новые факты про платежи и чеки — в `next-session-todo.md`, раздел 2.1.
+
+## 9. Итог (ВЫПОЛНЕНО, 17.10.2026)
+
+План раздела 5 выполнен полностью: шаги 2–8.
+- Закрытое из `next-session-todo.md` — в `docs/archive/next-session-todo-closed-2026-10-17.md`; живой todo переписан (только открытые задачи).
+- `system-state.md` сокращён до актуального; решённые проблемы (пп. 1–21), старые разделы и лог до 11.10 — в `docs/archive/system-state-closed-2026-10-17.md`.
+- `operations-log.md`: убран дубль «Сессия 15.10.2026», добавлена сессия 16–17.10, сессии 08–13.10 вынесены в `docs/commercial/archive/operations-log-sessions-2026-10-08_2026-10-13.md` с резюме; статус обновлён.
+- Обновлены `session-start.md`, `overview.md`, `bot.md`, `diagnostic-commands.md`, `ports.md`, `iptables-s2.md`, `versions.md`, `docs/README.md`. Старый IP Panel оставлен там, где он ещё в правилах `ufw` (S2, S_RU), с пометкой «до отключения после 25.10.2026».
+- `tmp/` и `next-session-todo.md.bak-2026-10-16` удалены по решению оператора.
+- Не сделано, остаётся в `next-session-todo.md`: добавить read-only проверки сертификатов S_RU и S2 в `diagnostic-commands.md` (нужны фактические ожидаемые значения); сверить версию Xray на S_RU (`diagnostic-commands.md` говорит «26.6.27, не обновлять», `system-state` до архивации — v26.9.30).
