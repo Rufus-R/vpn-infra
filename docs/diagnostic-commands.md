@@ -138,7 +138,7 @@ ufw status numbered
 python3 -c "import json;r=json.load(open('/usr/local/x-ui/bin/config.json'))['routing'];print(r['domainStrategy']);[print(x) for x in r['rules']]"
 ```
 
-**Ожидается:** `Xray 26.6.27` (⚠️ не обновлять); `IPIfNonMatch` и 5 правил, в т.ч. `geosite:category-ru` → direct и `geoip:ru` → direct.
+**Ожидается:** `Xray 26.10.10` (проверено 17.10.2026, работает на всех панелях; прежняя пометка «не обновлять» относилась к регрессии v26.9.9, на версиях ≥26.9.30 она не воспроизводится); `IPIfNonMatch` и 5 правил, в т.ч. `geosite:category-ru` → direct и `geoip:ru` → direct.
 
 ### Исходящий доступ
 
