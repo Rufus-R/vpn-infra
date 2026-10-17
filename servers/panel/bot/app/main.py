@@ -17,7 +17,7 @@ dp.include_router(router)
 
 
 async def main() -> None:
-    await init_db()  # TODO: заменить на Alembic-миграции перед продакшн-запуском
+    await init_db()  # применяет миграции Alembic (upgrade head)
     await seed_defaults()
     session = AiohttpSession(proxy=TG_PROXY_URL) if TG_PROXY_URL else AiohttpSession()
     bot = Bot(token=BOT_TOKEN, session=session)
