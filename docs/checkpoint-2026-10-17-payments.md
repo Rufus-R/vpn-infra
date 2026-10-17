@@ -93,3 +93,36 @@ ssh -n root@31.77.78.144 "systemctl cat netru-bot | grep -E 'WorkingDirectory|Ex
   истёкшем токене бот пишет админу «нужен повторный вход».
 - Порядок проверок API: сначала только чтение (профиль или сводка доходов), без создания чека; затем
   чек на минимальную сумму и сразу аннулирование.
+
+## 8. Ход выполнения (17–18.10.2026): шаг 0 — Alembic подготовлен, НЕ развёрнут
+
+Сделано и закоммичено (в бой не выкатывалось, бот на Panel работает на прежнем коде):
+- `servers/panel/bot/alembic.ini`, `migrations/env.py` (sync `sqlite:///{DB_PATH}`, `render_as_batch`),
+  `migrations/script.py.mako`, ревизия `0001` (baseline, сгенерирована из моделей) и `0002`
+  (таблица `receipts`); модель `Receipt` в `app/db/models.py`.
+- Проверено на копии боевой БД (Panel, `/tmp`): `stamp 0001` → `upgrade head` → `alembic check`
+  без расхождений; счётчики строк до/после совпали; `downgrade -1` и повторный `upgrade` прошли;
+  на пустой БД миграции с нуля и `check` тоже чистые.
+- Бэкап боевой БД до миграций: `/opt/netru-bot/bot.db.bak-20261017-pre-alembic` (права 600,
+  `integrity_check` = ok) — перед деплоем снять свежий.
+
+Окружение на Panel: код в `/opt/netru-bot/src` (= `WorkingDirectory`), `DB_PATH=/opt/netru-bot/bot.db`,
+venv `/opt/netru-bot/venv` с alembic 1.13.3, SQLAlchemy 2.0.35, httpx 0.27.2, aiohttp 3.10.11,
+aiogram 3.13.1. Сухой `rsync` репозиторий→Panel показал единственное расхождение: на Panel лишний файл
+`.env.bak-before-http-fix` (копия `.env`, секреты) — удалить по согласованию оператора.
+
+Мусор на Panel после проверок (удалить): `/tmp/bot-gen/`, `/tmp/bot-alembic-check.db`,
+`/tmp/bot-alembic-run.db`.
+
+Порядок деплоя (следующая сессия), потому что текущий `init_db()` через `create_all` создал бы
+`receipts` в обход Alembic и `upgrade head` упал бы:
+1. Остановить `netru-bot`; свежий бэкап `bot.db` (SQLite backup API).
+2. Заменить в `app/db/base.py` `create_all` и `_add_missing_columns` запуском миграций
+   (`alembic upgrade head`: через `command.upgrade` в `asyncio.to_thread` либо `ExecStartPre`).
+3. `rsync` кода на Panel БЕЗ `--delete` (исключить `.env*`, `venv`, `__pycache__`).
+4. Один раз вручную `alembic stamp 0001` на боевой БД, затем `alembic upgrade head`.
+5. Запустить бота; проверить «Поддержку» и «Мои подписки»; `systemctl status netru-bot`.
+6. Тестовые строки в боевой БД (`payments.id=1`, подписка в `pending_payment`) — чистить по todo 1.2.
+
+Дальше по плану раздела 4: ЮKassa (create_payment, вебхук), уведомление админу и кнопки, скрипт входа в
+«Мой налог», клиент API, оферта п.4.4.

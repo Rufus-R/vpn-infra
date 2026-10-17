@@ -115,3 +115,23 @@ class SupportMessage(Base):
     admin_message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     answered: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)
+
+
+class Receipt(Base):
+    """Чек самозанятого (НПД) по платежу ЮKassa — см. docs/checkpoint-2026-10-17-payments.md.
+    Один платёж — один чек (UNIQUE payment_id). amount — в копейках, как payments.amount.
+    status: pending_review (ждёт решения админа) / sending (запрос к «Мой налог» отправлен) /
+    sent / failed / unknown (результат запроса неизвестен — не повторять автоматически) /
+    rejected / cancelled (свободная строка, без enum)."""
+    __tablename__ = "receipts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    payment_id: Mapped[int] = mapped_column(ForeignKey("payments.id"), unique=True)
+    status: Mapped[str] = mapped_column(String(16), default="pending_review")
+    amount: Mapped[int] = mapped_column(Integer)
+    service_name: Mapped[str] = mapped_column(String(255))
+    receipt_uuid: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    receipt_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    error: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)
+    sent_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
