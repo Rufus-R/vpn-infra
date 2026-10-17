@@ -1,6 +1,6 @@
 # VPN Infrastructure — Документация
 
-## Последнее обновление: 01.10.2026
+## Последнее обновление: 17.10.2026
 
 ## Принципы организации документации
 
@@ -22,6 +22,7 @@
 ```
 docs/
 ├── README.md, session-start.md, system-state.md, diagnostic-commands.md, next-session-todo.md (задачи на следующую сессию)
+├── archive/ (закрытое из system-state и next-session-todo, журнал сессий 30.09–09.10)
 ├── home/
 │   ├── architecture/overview.md
 │   ├── openvpn/{clients,s1-server,s2-server,s1-client-to-s2}.md
@@ -37,7 +38,7 @@ docs/
 └── commercial/
     ├── overview.md, operations-log.md, tariffs.md, bot.md
     ├── reference/{commands,versions}.md (заглушки, TODO)
-    └── archive/ (Marzban-эпоха)
+    └── archive/ (Marzban-эпоха; журнал сессий 27.09–06.10 и 08–13.10; раздел Robokassa из bot.md)
 ```
 
 ## Быстрая навигация
@@ -51,9 +52,10 @@ docs/
 | Firewall S2 — ufw (общий хост) | [shared/networking/iptables-s2.md](shared/networking/iptables-s2.md) |
 | Все порты (общий хост) | [shared/reference/ports.md](shared/reference/ports.md) |
 | Коммерческий проект | [commercial/overview.md](commercial/overview.md) |
-| Миграция на 3x-ui | [commercial/operations-log.md](commercial/operations-log.md) |
+| Операционный журнал коммерческого проекта | [commercial/operations-log.md](commercial/operations-log.md) |
+| Открытые задачи | [next-session-todo.md](next-session-todo.md) |
 
-## Текущий статус (01.10.2026)
+## Текущий статус (17.10.2026)
 
 | Компонент | Статус |
 |-----------|--------|
@@ -62,5 +64,8 @@ docs/
 | S2 security (открытые порты 53/80/1194) | ✅ Исправлено 27.09.2026 |
 | MTProxy / relay-node (legacy) | ❌ Демонтированы (26.09, 28.09.2026) |
 | Коммерческий проект: Marzban | ❌ Полностью демонтирован (28.09.2026) |
-| Коммерческий проект: 3x-ui | ✅ Работает: канал и geo-split на S_RU подтверждены 30.09 и 01.10.2026; открыто: Telegram-бот, резервный канал |
+| Коммерческий проект: 3x-ui | ✅ Работает: канал и geo-split на S_RU подтверждены 30.09 и 01.10.2026; открыто: резервный канал S_RU↔S2 |
+| Panel (мастер-панель, бот, лендинг) | ✅ Переехал на `31.77.78.144` 17.10.2026; старый Panel отключается после 25.10.2026 |
+| Telegram-бот | ✅ Триал, «Тарифы», «Мои подписки», «Поддержка»; оплата не включена (платёжная схема и чеки — открытый вопрос) |
+| DNSSEC для `netru.ru.net` | ⚠️ DS в зоне `ru.net` не добавлен — обращение в SpaceWeb |
 | Firewall S2 | ✅ ufw с 01.10.2026 (ребут-тест пройден) |
