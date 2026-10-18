@@ -44,6 +44,14 @@ def plan_detail_keyboard(plan_id: int) -> InlineKeyboardMarkup:
     ])
 
 
+def pay_keyboard(url: str) -> InlineKeyboardMarkup:
+    """Кнопка со ссылкой на оплату ЮKassa — см. app/handlers/tariffs.py, cb_plan_order()."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💳 Перейти к оплате", url=url)],
+        [InlineKeyboardButton(text="⬅️ К тарифам", callback_data="menu:tariffs")],
+    ])
+
+
 def admin_payment_keyboard(payment_id: int) -> InlineKeyboardMarkup:
     # 11.10.2026: не вызывается из текущего кода (fallback отключён), оставлена
     # для переиспользования после интеграции ЮKassa — см. tariffs.py, cb_admin_confirm.

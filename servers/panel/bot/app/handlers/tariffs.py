@@ -1,26 +1,18 @@
 """Раздел «Тарифы».
 
-🔴 11.10.2026 (решение оператора): приём платежей возможен ТОЛЬКО через ЮKassa
-с автоматическим чеком. Ручной fallback (перевод + подтверждение админом без чека)
-ПОЛНОСТЬЮ ОТКЛЮЧЁН как принцип, не как временная мера — процедура "выдавать чек
-вручную через Мой налог для fallback-платежей" исключена оператором.
+Кнопка «💳 Оформить заказ» создаёт платёж ЮKassa (app/payments.py, start_payment) и
+показывает кнопку со ссылкой на оплату; подписку выдаёт обработка вебхука/сверки
+(app/payments.py), а не этот файл. Пока настройки ЮKassa не заданы (payments_enabled()
+== False), кнопка показывает прежнее сообщение «оплата скоро».
 
-Кнопка «💳 Оформить заказ» в карточке тарифа ОСТАВЛЕНА в интерфейсе: нужна для
-скриншотов в заявке на подключение приёма платежей в мессенджере (форма ЮKassa
-требует показать "товары/услуги с ценами" и "кнопки оформления заказа" в уже
-работающем, открытом для всех боте). При нажатии она больше НЕ создаёт
-Payment/Subscription и не уведомляет админа — только сообщает пользователю,
-что онлайн-оплата скоро заработает, и предлагает бесплатный триал.
-
-Хендлеры admin:confirm:/admin:reject: НЕ удалены из файла — они написаны так,
-что идентичны будущему обработчику вебхука ЮKassa (тот же блок add_client ->
-get_client -> sub_url при переходе payment.status в confirmed), оставлены для
-минимизации диффа при интеграции. Сейчас недостижимы: ни один Payment со
-статусом pending через бота больше не создаётся.
+Хендлеры admin:confirm:/admin:reject: остались от отключённой 11.10.2026 fallback-оплаты
+и недостижимы (admin_payment_keyboard нигде не показывается); их активационный блок
+продублирован в app/payments.py — кандидаты на удаление.
 
 См. docs/commercial/bot.md, раздел "Сценарий: покупка тарифа".
 """
 import datetime as dt
+import logging
 
 from aiogram import Router, F
 from aiogram.types import CallbackQuery
@@ -31,10 +23,22 @@ from app.db.base import async_session
 from app.db.models import User, Plan, Subscription, Payment
 from app.db.seed import TRIAL_PLAN_NAME
 from app.handlers.start import require_consent, CONSENT_TEXT
-from app.keyboards import tariffs_menu, plan_detail_keyboard, consent_keyboard
+from app.keyboards import tariffs_menu, plan_detail_keyboard, consent_keyboard, pay_keyboard
 from app.panel_api import PanelApiClient, PanelApiError
+from app.payments import payments_enabled, start_payment
+from app.yookassa_api import YooKassaError
 
 router = Router()
+logger = logging.getLogger("tariffs")
+
+
+def _payment_note() -> str:
+    if payments_enabled():
+        return "Оплата через ЮKassa. После оплаты подписка активируется автоматически."
+    return (
+        "Онлайн-оплата через ЮKassa (с автоматическим чеком) подключается — "
+        "совсем скоро можно будет оформить заказ прямо здесь."
+    )
 
 
 @router.callback_query(F.data == "menu:tariffs")
@@ -72,23 +76,42 @@ async def cb_plan_detail(callback: CallbackQuery) -> None:
         f"{plan.description or ''}\n\n"
         f"Стоимость: {price_rub} ₽ / {plan.duration_days} дн.\n"
         f"Устройств: {plan.device_count}\n\n"
-        "Онлайн-оплата через ЮKassa (с автоматическим чеком) подключается — "
-        "совсем скоро можно будет оформить заказ прямо здесь."
+        + _payment_note()
     )
     await callback.message.answer(text, reply_markup=plan_detail_keyboard(plan.id), parse_mode="HTML")
 
 
 @router.callback_query(F.data.startswith("plan:paid:"))
 async def cb_plan_order(callback: CallbackQuery) -> None:
-    """Кнопка «💳 Оформить заказ». 11.10.2026: приём платежей вне ЮKassa отключён —
-    см. предупреждение в шапке файла. Эта функция больше не создаёт заявку на оплату."""
+    """Кнопка «💳 Оформить заказ»: создаёт платёж ЮKassa и отдаёт ссылку на оплату.
+    Пока ЮKassa не настроена — прежнее сообщение «оплата скоро»."""
     await callback.answer()
+    if not payments_enabled():
+        await callback.message.answer(
+            "Онлайн-оплата временно недоступна — мы подключаем приём платежей через "
+            "ЮKassa с автоматическим чеком. Совсем скоро можно будет оформить заказ "
+            "прямо здесь.\n\n"
+            "А пока доступен бесплатный пробный период — кнопка «🎁 Попробовать "
+            "бесплатно» в главном меню."
+        )
+        return
+    user = await require_consent(callback.from_user.id)
+    if user is None:
+        await callback.message.answer(CONSENT_TEXT, reply_markup=consent_keyboard())
+        return
+    plan_id = int(callback.data.removeprefix("plan:paid:"))
+    try:
+        url = await start_payment(user.tg_id, plan_id)
+    except (YooKassaError, ValueError):
+        logger.exception("не удалось создать платёж: tg_id=%s plan_id=%s", user.tg_id, plan_id)
+        await callback.message.answer(
+            "Не удалось создать платёж. Попробуйте чуть позже или обратитесь в «Поддержку»."
+        )
+        return
     await callback.message.answer(
-        "Онлайн-оплата временно недоступна — мы подключаем приём платежей через "
-        "ЮKassa с автоматическим чеком. Совсем скоро можно будет оформить заказ "
-        "прямо здесь.\n\n"
-        "А пока доступен бесплатный пробный период — кнопка «🎁 Попробовать "
-        "бесплатно» в главном меню."
+        "Заказ создан. Нажмите кнопку ниже, чтобы перейти к оплате. После оплаты "
+        "подписка придёт сюда автоматически.",
+        reply_markup=pay_keyboard(url),
     )
 
 
@@ -159,7 +182,7 @@ async def cb_admin_confirm(callback: CallbackQuery) -> None:
         )
         return
 
-    await callback.message.edit_text(callback.message.text + "\n\n✅ ПОДТВЕРЖДЕНО")
+    await callback.message.edit_text(callback.message.text + "\n\n ✅ ПОДТВЕРЖДЕНО")
 
     if sub_url:
         text = f"Оплата подтверждена! Ваша подписка активна.\n\nСсылка на подписку:\n{sub_url}"
@@ -197,7 +220,7 @@ async def cb_admin_reject(callback: CallbackQuery) -> None:
         subscription.status = "rejected"
         await session.commit()
 
-    await callback.message.edit_text(callback.message.text + "\n\n❌ ОТКЛОНЕНО")
+    await callback.message.edit_text(callback.message.text + "\n\n ❌ ОТКЛОНЕНО")
     try:
         await callback.bot.send_message(
             user_tg_id,
