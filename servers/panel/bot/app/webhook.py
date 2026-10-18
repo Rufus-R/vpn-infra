@@ -70,6 +70,7 @@ async def _handle(request: web.Request) -> web.Response:
     obj = body.get("object")
     provider_payment_id = obj.get("id") if isinstance(obj, dict) else None
     if event in _HANDLED_EVENTS and isinstance(provider_payment_id, str):
+        logger.info("webhook: событие %s, платёж %s", event, provider_payment_id)
         task = asyncio.create_task(_process(request.app[_BOT_KEY], provider_payment_id))
         _TASKS.add(task)
         task.add_done_callback(_TASKS.discard)
