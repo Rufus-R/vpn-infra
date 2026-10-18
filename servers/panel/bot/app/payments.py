@@ -19,7 +19,7 @@ import time
 
 import httpx
 from aiogram import Bot
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.config import (
     ADMIN_IDS, REALITY_INBOUND_ID, SUB_BASE_URL, YOOKASSA_RETURN_URL,
@@ -31,6 +31,15 @@ from app.panel_api import PanelApiClient, PanelApiError
 from app.yookassa_api import YooKassaClient, YooKassaError, kopecks_from_amount
 
 logger = logging.getLogger("payments")
+
+
+class ActiveSubscriptionError(Exception):
+    """У пользователя уже есть действующая платная подписка — новый заказ не создаётся
+    (вариант B, docs/checkpoint-2026-10-17-payments.md, раздел 12, находка 2)."""
+
+    def __init__(self, active_until: dt.datetime) -> None:
+        super().__init__(f"активная платная подписка до {active_until:%Y-%m-%d}")
+        self.active_until = active_until
 
 REUSE_MAX_AGE = dt.timedelta(minutes=30)
 NO_PROVIDER_ID_EXPIRE_AFTER = dt.timedelta(minutes=30)
@@ -68,6 +77,18 @@ async def start_payment(tg_id: int, plan_id: int) -> str:
             plan = await session.get(Plan, plan_id)
             if plan is None or plan.price <= 0:
                 raise ValueError("тариф недоступен для оплаты")
+            # Блокировка новой покупки при действующей платной подписке. Строим по end_at:
+            # статус expired в коде нигде не выставляется. Уже созданные заказы это не
+            # затрагивает — _activate_locked проверку не вызывает.
+            active_until = (await session.execute(
+                select(func.max(Subscription.end_at)).where(
+                    Subscription.user_id == user.id,
+                    Subscription.status == "active",
+                    Subscription.end_at > dt.datetime.utcnow(),
+                )
+            )).scalar_one_or_none()
+            if active_until is not None:
+                raise ActiveSubscriptionError(active_until)
             reusable = (await session.execute(
                 select(Payment)
                 .join(Subscription, Payment.subscription_id == Subscription.id)

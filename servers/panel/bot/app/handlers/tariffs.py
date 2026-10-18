@@ -25,7 +25,7 @@ from app.db.seed import TRIAL_PLAN_NAME
 from app.handlers.start import require_consent, CONSENT_TEXT
 from app.keyboards import tariffs_menu, plan_detail_keyboard, consent_keyboard, pay_keyboard
 from app.panel_api import PanelApiClient, PanelApiError
-from app.payments import payments_enabled, start_payment
+from app.payments import ActiveSubscriptionError, payments_enabled, start_payment
 from app.yookassa_api import YooKassaError
 
 router = Router()
@@ -102,6 +102,13 @@ async def cb_plan_order(callback: CallbackQuery) -> None:
     plan_id = int(callback.data.removeprefix("plan:paid:"))
     try:
         url = await start_payment(user.tg_id, plan_id)
+    except ActiveSubscriptionError as exc:
+        await callback.message.answer(
+            f"У вас уже есть действующая платная подписка (до {exc.active_until:%d.%m.%Y}). "
+            "Новый заказ пока оформить нельзя — продление появится позже. "
+            "Ссылку на подписку можно открыть в разделе «📱 Мои подписки»."
+        )
+        return
     except (YooKassaError, ValueError):
         logger.exception("не удалось создать платёж: tg_id=%s plan_id=%s", user.tg_id, plan_id)
         await callback.message.answer(
