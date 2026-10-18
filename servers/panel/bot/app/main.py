@@ -1,10 +1,11 @@
 import asyncio
 import logging
+from urllib.parse import urlparse
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.session.aiohttp import AiohttpSession
 
-from app.config import BOT_TOKEN, TG_PROXY_URL
+from app.config import BOT_TOKEN, PANEL_API_BASE, TG_PROXY_URL
 from app.db.base import init_db
 from app.db.seed import seed_defaults
 from app.handlers import router
@@ -12,6 +13,24 @@ from app.payments import payments_enabled, reconcile_loop
 from app.webhook import start_webhook
 
 logging.basicConfig(level=logging.INFO)
+
+
+class _HidePanelPath(logging.Filter):
+    """httpx на уровне INFO пишет полный URL запроса; к Panel он содержит секретный
+    webBasePath. Записи с этим сегментом пути в журнал не пропускаем."""
+
+    def __init__(self, secret: str) -> None:
+        super().__init__()
+        self._secret = secret
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return self._secret not in record.getMessage()
+
+
+_panel_secret = urlparse(PANEL_API_BASE).path.rstrip("/").removesuffix("/panel/api")
+if _panel_secret.strip("/"):
+    logging.getLogger("httpx").addFilter(_HidePanelPath(_panel_secret))
+
 logger = logging.getLogger("bot")
 
 dp = Dispatcher()
