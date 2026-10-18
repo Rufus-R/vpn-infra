@@ -168,3 +168,43 @@ aiogram 3.13.1. Сухой `rsync` репозиторий→Panel показал
 Дальше: проверить `0003` на копии БД; написать модули; nginx `location` (бэкап конфига, `nginx -t`); URL уведомлений в кабинете ЮKassa; тестовая оплата картой `5555555555554444`; затем шаги 3–5 раздела 4.
 
 Открыто: нужен ли `receipt` в запросе для боевого магазина; время ожидания ответа API и повторы при таймауте создания платежа (с тем же `Idempotence-Key`); текст пользовательских сообщений об оплате.
+
+## 11. Ход выполнения (18.10.2026): код ЮKassa написан и закоммичен, НЕ развёрнут
+
+Коммиты (ветка main): `428e00f` клиент ЮKassa и настройки, `4367f1d` payments.py и `PanelApiClient.client_exists`, `48a14fc` `payments_enabled()`, `461edea` вебхук и main.py, `ba01d93` кнопка «Оформить заказ». Ревизия `0003` (`25ade38`) тоже не развёрнута.
+
+### Что сделано
+
+- `app/yookassa_api.py` (httpx, Basic-аутентификация, ключ из файла, суммы через Decimal, проверка формата id платежа).
+- `app/payments.py`: `start_payment` (переиспользует свежий `pending` младше 30 минут, ссылку берёт GET-запросом), `process_payment_event` (решение по ответу GET: статус, `paid`, сумма в копейках, валюта, `metadata.payment_id`), активация с идемпотентностью (`client_exists` перед `add_client`), статусы `pending -> processing -> confirmed`, `paid_failed`, `canceled`, `expired`, `mismatch`, строка `receipts` (`pending_review`), уведомления админам, сверка раз в 60 секунд.
+- `app/webhook.py`: aiohttp на `127.0.0.1:8711`, путь `/yookassa-webhook/{secret}/`, проверка секрета (`hmac.compare_digest`) и IP из `X-Real-IP`, быстрый 200, обработка фоновой задачей, `access_log=None`.
+- `app/main.py`: вебхук и сверка стартуют только при заданных `YOOKASSA_SHOP_ID`, `YOOKASSA_SECRET_KEY_FILE`, `YOOKASSA_WEBHOOK_SECRET`, `YOOKASSA_RETURN_URL`; иначе бот работает как раньше, кнопка показывает «оплата скоро».
+- `tariffs.py`, `keyboards.py`: кнопка создаёт платёж и показывает кнопку-ссылку на оплату.
+
+### Проверено 18.10.2026
+
+- Тестовый магазин: `GET /v3/payments/{id}` для `pending` возвращает `confirmation.confirmation_url`; поля `expires_at` в ответе нет (срок ограничен на стороне бота).
+- Panel 3x-ui 3.10.2: `get/{email}` для несуществующего клиента даёт `success:false`, текст `Obtain (record not found)`.
+- Боевая БД: в `payments` одна строка, `provider_payment_id` равен NULL (индекс `0003` безопасен). Поправка к todo 1.2: `payments.id=1` в статусе `rejected`, `subscriptions.id=2` `rejected`, подписки `id=4` нет.
+- nginx на Panel: в блоке 443 только `/oferta`, `/privacy`, `/`; директив `real_ip` нет; `access_log` глобальный.
+- Импорт `app.main` и чистые функции проверены на Panel во временном каталоге (суммы, список IP ЮKassa, `payments_enabled() == False` без настроек).
+
+### НЕ проверено
+
+Весь живой поток (создание платежа из бота, вебхук через nginx, `X-Real-IP`, активация, сообщение пользователю, строка `receipts`), сверка, сбойные ветки (`paid_failed`, `mismatch`, отмена), повторное нажатие кнопки (переиспользование ссылки), поведение боевого магазина (нужен ли `receipt`). Известное ограничение: платёж в статусе `expired` сверка не опрашивает, поздний платёж по нему придёт только вебхуком.
+
+### Порядок деплоя (следующая сессия)
+
+1. Сверить `WorkingDirectory` юнита и `DB_PATH`; снять свежий бэкап `bot.db` (SQLite backup API) и архив кода без `.env`.
+2. `rsync` кода на Panel БЕЗ `--delete`, исключить `.env*`, `venv`, `__pycache__`, `*.db`; `pip list` в venv: `aiohttp` 3.10.11 уже стоит, новых зависимостей быть не должно.
+3. На Panel сгенерировать секрет вебхука (`openssl rand -hex 24`) и дописать в `.env` (права 600): `YOOKASSA_SHOP_ID=1500626`, `YOOKASSA_SECRET_KEY_FILE=/root/.secrets/yookassa-test-secret.txt`, `YOOKASSA_WEBHOOK_SECRET=<секрет>`, `YOOKASSA_RETURN_URL=https://t.me/netrurunet_bot`, `WEBHOOK_PORT=8711`. Секрет в чат не выводить.
+4. nginx: бэкап конфига, в блок 443 добавить `location /yookassa-webhook/<секрет>/` с `access_log off`, `proxy_set_header X-Real-IP $remote_addr`, `proxy_pass http://127.0.0.1:8711`; `nginx -t`, затем reload.
+5. Перезапуск `netru-bot` (только через systemctl): `init_db()` применит `0003`; проверить `alembic_version = 0003`, строку «webhook ЮKassa слушает 127.0.0.1:8711» в журнале.
+6. Негативные проверки вебхука с Panel: неверный секрет даёт 404; верный секрет без `X-Real-IP` даёт 403.
+7. Действие оператора: в кабинете ЮKassa (Интеграция — HTTP-уведомления) указать URL `https://netru.ru.net/yookassa-webhook/<секрет>/`, события `payment.succeeded` и `payment.canceled`.
+8. Живой тест: оплата тестовой картой `5555555555554444`; проверить `payments.status = confirmed`, подписка `active`, клиент на Panel, `receipts.status = pending_review`, сообщение пользователю и уведомление админу. Отдельно: повторное нажатие кнопки до оплаты (должна прийти та же ссылка), отмена платежа.
+9. Уборка: тестовый клиент на Panel и тестовые подписки; затем решить судьбу недостижимых хендлеров `admin:confirm:`/`admin:reject:` и `admin_payment_keyboard` (отдельным коммитом).
+
+### Документация после деплоя
+
+Обновить `bot.md` (раздел «Платёжная схема»), `next-session-todo.md` (2.1; поправка к 1.2), `system-state.md`, `commercial/operations-log.md`. Решение по чекам («Мой налог») и оферта п.4.4 остаются открытыми.
