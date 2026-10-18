@@ -126,3 +126,14 @@ aiogram 3.13.1. Сухой `rsync` репозиторий→Panel показал
 
 Дальше по плану раздела 4: ЮKassa (create_payment, вебхук), уведомление админу и кнопки, скрипт входа в
 «Мой налог», клиент API, оферта п.4.4.
+
+## 9. Ход выполнения (18.10.2026): Alembic развёрнут на Panel
+
+Заменяет формулировку «НЕ развёрнут» и порядок деплоя из раздела 8.
+- Код (коммит `03e9dcd`): `init_db()` (`app/db/base.py`) выполняет `alembic upgrade head` через `asyncio.to_thread`; `create_all` и `_add_missing_columns` удалены; в `main.py` изменён комментарий. Выбран запуск из `init_db()`, а не `ExecStartPre`: юнит systemd не менялся, миграции применяются при любом способе старта, при сбое миграции бот не стартует.
+- Проверка до боя на копии боевой БД (Panel, боевой venv): копия без `stamp` падает с `OperationalError`; после `stamp 0001` — `init_db()` OK, `alembic current` = `0002 (head)`, `alembic check` чистый, счётчики строк и `integrity_check` без изменений, повторный `init_db()` идемпотентен.
+- Деплой (около 02:44–02:47 MSK): бот остановлен; бэкап `/opt/netru-bot/bot.db.bak-20261018-pre-alembic-deploy` (600, `integrity_check` ok) и архив прежнего кода `/root/netru-bot-src-pre-alembic-20261018.tgz` (без `.env`); `rsync` без `--delete`; на боевой БД `stamp 0001` → `upgrade head`; счётчики до/после совпали (users 7, plans 7, subscriptions 6, payments 1, referral_bonuses 0, support_messages 10); бот запущен, `Start polling` без ошибок.
+- Живой тест: «Мои подписки» и «Поддержка» (сообщение дошло админу, ответ доставлен пользователю); `support_messages` 12, `alembic_version` = `0002`, `receipts` пуста.
+- Уборка: удалены `.env.bak-before-http-fix` на Panel (копия `.env` с секретами) и временные файлы в `/tmp`.
+- Не сделано: чистка бэкапов деплоя и тестовых строк `payments.id=1`, `subscriptions.id=4` — `next-session-todo.md`, 1.2 (наличие тестовых строк в этой сессии не проверялось).
+- Дальше по плану раздела 4, шаги 2–5: ЮKassa (`create_payment`, вебхук), уведомление админу с черновиком чека и кнопками, одноразовый скрипт входа в «Мой налог» (раздел 7), клиент API, оферта п.4.4.

@@ -35,6 +35,10 @@
   `/root/panel-openapi.json`) — удалить, если остались.
 - Проверить тестовые строки в `bot.db`: `payments.id=1` (pending), `subscriptions.id=4`
   (pending_payment) — почистить, если есть.
+- Бэкапы деплоя Alembic на Panel: `/opt/netru-bot/bot.db.bak-20261018-pre-alembic-deploy`,
+  `/opt/netru-bot/bot.db.bak-20261017-pre-alembic`, архив прежнего кода
+  `/root/netru-bot-src-pre-alembic-20261018.tgz` (без `.env`) — удалить после недели стабильной
+  работы; старые `bot.db.bak-2026101*`/`bot.db.old-tests-*` в `/opt/netru-bot/` — решить судьбу.
 
 ### 1.3. DNSSEC (открыт)
 - Зона `ru.net` подписана (оператор — nic.ru), но DS для `netru.ru.net` в ней нет (проверено
@@ -69,8 +73,9 @@
   что свободен); в `tariffs.py` реальный `create_payment`, логика `admin:confirm:` как
   обработчик успешного платежа; поправить оферту п.4.4 под выбранную схему чеков
   (`/root/commercial-legal/` на S1, вне git).
-- Alembic настроить ДО включения реальной оплаты: `create_all()` не добавляет колонки в
-  существующие таблицы (реализовалось 10.10.2026, `users.privacy_accepted`).
+- Alembic развёрнут на Panel 18.10.2026 (`0002 (head)`, таблица `receipts` создана, пуста);
+  миграции применяет `init_db()` при старте бота. Изменения схемы — только новой ревизией
+  (`alembic revision`), без `create_all`; перед деплоем — бэкап `bot.db`.
 - `PAYMENT_REQUISITES_TEXT` в `config.py` и `.env` больше не используется — удалить как
   мёртвую переменную (низкий приоритет).
 
