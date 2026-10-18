@@ -1,7 +1,7 @@
 """Схема БД бота — см. docs/commercial/bot.md, раздел 'Схема данных'."""
 from __future__ import annotations
 import datetime as dt
-from sqlalchemy import String, Integer, BigInteger, Boolean, ForeignKey, DateTime, JSON
+from sqlalchemy import String, Integer, BigInteger, Boolean, ForeignKey, DateTime, Index, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 
@@ -67,6 +67,9 @@ class Subscription(Base):
 
 class Payment(Base):
     __tablename__ = "payments"
+    __table_args__ = (
+        Index("uq_payments_provider_payment_id", "provider_payment_id", unique=True),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
