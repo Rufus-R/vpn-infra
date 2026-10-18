@@ -79,6 +79,18 @@ class PanelApiClient:
         data = await self._call("GET", f"/clients/get/{email}")
         return data["obj"]
 
+    async def client_exists(self, email: str) -> bool:
+        """True, если клиент есть на Panel. Для несуществующего get/{email} отвечает
+        success=false с текстом '... (record not found)' (проверено 18.10.2026, 3x-ui 3.10.2);
+        любая другая ошибка пробрасывается."""
+        try:
+            await self.get_client(email)
+        except PanelApiError as exc:
+            if "record not found" in str(exc):
+                return False
+            raise
+        return True
+
     async def del_client(self, email: str) -> dict:
         """⚠️ POST, не DELETE — подтверждено в bot.md."""
         return await self._call("POST", f"/clients/del/{email}")
