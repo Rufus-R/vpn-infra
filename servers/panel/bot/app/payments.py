@@ -21,7 +21,10 @@ import httpx
 from aiogram import Bot
 from sqlalchemy import select
 
-from app.config import ADMIN_IDS, REALITY_INBOUND_ID, SUB_BASE_URL, YOOKASSA_RETURN_URL
+from app.config import (
+    ADMIN_IDS, REALITY_INBOUND_ID, SUB_BASE_URL, YOOKASSA_RETURN_URL,
+    YOOKASSA_SECRET_KEY_FILE, YOOKASSA_SHOP_ID, YOOKASSA_WEBHOOK_SECRET,
+)
 from app.db.base import async_session
 from app.db.models import Payment, Plan, Receipt, Subscription, User
 from app.panel_api import PanelApiClient, PanelApiError
@@ -374,3 +377,9 @@ async def reconcile_loop(bot: Bot) -> None:
         except Exception:
             logger.exception("сверка платежей: сбой цикла")
         await asyncio.sleep(RECONCILE_INTERVAL_SEC)
+
+
+def payments_enabled() -> bool:
+    """Приём платежей включён, только когда заданы все настройки ЮKassa."""
+    return all((YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY_FILE,
+                YOOKASSA_WEBHOOK_SECRET, YOOKASSA_RETURN_URL))
