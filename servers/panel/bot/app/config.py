@@ -67,3 +67,16 @@ PAYMENT_REQUISITES_TEXT = os.environ.get(
     "Реквизиты для оплаты временно не заданы — обратитесь к администратору через "
     "раздел «Поддержка».",
 )
+
+# ЮKassa (см. docs/checkpoint-2026-10-17-payments.md, раздел 10). Все значения необязательны
+# при импорте: пока они не заданы, платежи не включены (YooKassaClient при создании
+# сообщает об этом явной ошибкой), а бот остальными разделами работает как раньше.
+# Секретный ключ в .env не кладём — только путь к файлу (права 600, вне git).
+YOOKASSA_SHOP_ID = os.environ.get("YOOKASSA_SHOP_ID")
+YOOKASSA_SECRET_KEY_FILE = os.environ.get("YOOKASSA_SECRET_KEY_FILE")
+# Секретный сегмент пути вебхука: /yookassa-webhook/<секрет>/ (nginx -> 127.0.0.1:WEBHOOK_PORT).
+YOOKASSA_WEBHOOK_SECRET = os.environ.get("YOOKASSA_WEBHOOK_SECRET")
+# Куда ЮKassa возвращает пользователя после оплаты (ссылка на бота).
+YOOKASSA_RETURN_URL = os.environ.get("YOOKASSA_RETURN_URL")
+# Локальный порт aiohttp-сервера вебхука в процессе бота (8711 свободен, проверено 18.10.2026).
+WEBHOOK_PORT = int(os.environ.get("WEBHOOK_PORT", "8711"))
