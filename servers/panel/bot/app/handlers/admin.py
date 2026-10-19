@@ -164,6 +164,31 @@ async def cb_admin_support(callback: CallbackQuery) -> None:
     await _show(callback, text, admin_back_keyboard())
 
 
+# Сводка summary из GET /clients/list/paged: для каждого показателя Panel отдаёт и счётчик
+# (xCount), и список email (ограничен 200) — берём счётчик, иначе число или длину списка.
+_PANEL_SUMMARY = (
+    ("total", "Всего клиентов"),
+    ("active", "Активных"),
+    ("online", "Сейчас онлайн"),
+    ("depleted", "Исчерпаны (срок или трафик)"),
+    ("expiring", "Скоро истекают"),
+    ("deactive", "Отключены"),
+)
+
+
+def _summary_lines(summary: dict) -> list[str]:
+    lines = []
+    for key, label in _PANEL_SUMMARY:
+        value = summary.get(f"{key}Count", summary.get(key))
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, list):
+            value = len(value)
+        if isinstance(value, (int, float)):
+            lines.append(f"• {label}: {int(value)}")
+    return lines
+
+
 @router.callback_query(F.data == "adm:panel")
 async def cb_admin_panel(callback: CallbackQuery) -> None:
     await callback.answer()
@@ -181,13 +206,7 @@ async def cb_admin_panel(callback: CallbackQuery) -> None:
         obj = data.get("obj")
         summary = obj.get("summary") if isinstance(obj, dict) else None
         if isinstance(summary, dict):
-            for key, value in summary.items():
-                if isinstance(value, bool):
-                    continue
-                if isinstance(value, (int, float)):
-                    lines.append(f"• {key}: {value}")
-                elif isinstance(value, list):
-                    lines.append(f"• {key}: {len(value)}")
+            lines += _summary_lines(summary)
         text = "\n".join(lines)
     finally:
         await panel.close()
