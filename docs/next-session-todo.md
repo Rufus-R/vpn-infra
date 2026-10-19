@@ -36,7 +36,7 @@
   `/root/netru-bot-src-pre-alembic-20261018.tgz` (без `.env`) — удалить после недели стабильной
   работы; старые `bot.db.bak-2026101*`/`bot.db.old-tests-*` в `/opt/netru-bot/` — решить судьбу.
 - Бэкапы 18–19.10 к удалению через неделю стабильной работы. На Panel: `/root/cleanup-backup-20261018/`, `/opt/netru-bot/bot.db.bak-20261018-pre-block-deploy`, `/opt/netru-bot/bot.db.bak-20261018-pre-yookassa-deploy`, `/root/netru-bot-src-pre-yookassa-20261018.tgz`, `/root/testS2-removal-backup-20261019-081525`, `/root/landing-backup-20261019-113405`. На S2: `/root/testS2-removal-backup-20261019-082011`.
-- Лендинг (`/var/www/netru-landing/`: `index.html`, `oferta.html`, `privacy.html`, значки подключены 19.10.2026) живёт только на Panel, в git его нет — решить, версионировать ли; синхронизировать оферту и политику на Panel с `/root/commercial-legal/` на S1 (решение оператора 19.10.2026; теги значков добавить и в исходники).
+- Лендинг (`/var/www/netru-landing/`: `index.html`, `oferta.html`, `privacy.html`, значки подключены 19.10.2026) живёт только на Panel, в git его нет — решить, версионировать ли; оферта и политика: сборка воспроизведена (`/root/commercial-legal/build-pages.py`, описание — `commercial/overview.md`, раздел «Юридические документы и лендинг: сборка и выкладка»), `landing-build/` совпадает с Panel; осталось решить, заменять ли `landing/` на `landing-build/`, и сохранить скрипт и исходники вне одного диска S1 (бэкап).
 
 ### 1.3. DNSSEC (открыт)
 - Зона `ru.net` подписана (оператор — nic.ru), но DS для `netru.ru.net` в ней нет (проверено

@@ -97,6 +97,17 @@ S_RU (Xray, routing):
 7. Платежи: Robokassa отказала самозанятому (15.10); у ЮKassa автоотправка чеков для самозанятых прекращена 29.12.2025 (по данным поиска, не проверено на нашей учётке) — схема чеков не выбрана, приём реальных платежей не включён.
 8. DNSSEC для `netru.ru.net` не завершён: DS в зоне `ru.net` отсутствует (проверено 17.10.2026).
 
+## Юридические документы и лендинг: сборка и выкладка
+
+Каталог `/root/commercial-legal/` на S1 — вне git (README внутри ссылается сюда). Лендинг на Panel (`/var/www/netru-landing/`: `index.html`, `oferta.html`, `privacy.html`, значки `favicon.ico`, `favicon.png`, `apple-touch-icon.png`) тоже в git не хранится.
+
+- Источники текстов: `oferta.md`, `privacy-policy.md` (Markdown). `privacy-policy.notes.md` и файлы `*.bak-20261011` на сайт не выкладываются (при выкладке 11.10.2026 проверялось отсутствие утечки примечаний).
+- Конвертер: `python3-markdown` (на S1 python-markdown 3.5.2, `markdown_py`), расширение `tables`. Подтверждено 19.10.2026: тело страницы, собранное из `.md`, совпало с телом `landing/oferta.html` и `landing/privacy.html` знак в знак; журнал сессии 11.10 (`commercial/archive/operations-log-sessions-2026-10-08_2026-10-13.md`) называет тот же способ.
+- Скрипт сборки: `/root/commercial-legal/build-pages.py` (вне git, создан 19.10.2026; прежний скрипт был восстановлен из `.bash_history` и не сохранён). Запуск: `python3 /root/commercial-legal/build-pages.py`. Шаблон (стили, обёртка `.wrap`, `<footer>`) берёт из `landing/*.html`, тело — из `.md`, перед `</head>` вставляет три тега значков; пишет в `landing-build/`, `landing/` не меняет; `index.html` копирует с тегами (это не конвертация).
+- Проверено 19.10.2026: `landing-build/` совпадает с файлами на Panel (`diff` пуст по всем трём страницам). Каталог `landing/` остаётся прежним, без тегов значков; решение, заменять ли его на `landing-build/`, не принято.
+- Выкладка на Panel (процедура, не опробована, при необходимости): бэкап трёх файлов на Panel; `scp` из `landing-build/` в `/var/www/netru-landing/`; проверка `curl -s -o /dev/null -w '%{http_code}'` для `/`, `/oferta`, `/privacy`, `/favicon.ico`; перечитать страницы глазами. Права файлов на Panel — 644, владелец root; nginx менять не нужно (`location /oferta` и `/privacy` отдают `oferta.html` и `privacy.html`).
+- Оферта п.4.4 (формулировка про чеки) ждёт выбора схемы чеков, см. `../next-session-todo.md`, 2.1. Изменение оферты — правка `oferta.md`, затем сборка и выкладка.
+
 ## Связанные документы
 
 - [operations-log.md](operations-log.md) — миграция, журналы сессий, процедуры
