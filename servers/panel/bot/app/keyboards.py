@@ -55,17 +55,6 @@ def pay_keyboard(url: str) -> InlineKeyboardMarkup:
     ])
 
 
-def admin_payment_keyboard(payment_id: int) -> InlineKeyboardMarkup:
-    # 11.10.2026: не вызывается из текущего кода (fallback отключён), оставлена
-    # для переиспользования после интеграции ЮKassa — см. tariffs.py, cb_admin_confirm.
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="✅ Подтвердить", callback_data=f"admin:confirm:{payment_id}"),
-            InlineKeyboardButton(text="❌ Отклонить", callback_data=f"admin:reject:{payment_id}"),
-        ],
-    ])
-
-
 def subscriptions_keyboard(links: list[tuple[str, str]]) -> InlineKeyboardMarkup:
     """Раздел «Мои подписки» — URL-кнопка на каждую активную подписку (если удалось
     получить subId), плюс «Назад» в любом случае."""

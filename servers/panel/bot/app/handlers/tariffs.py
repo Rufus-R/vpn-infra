@@ -5,26 +5,22 @@
 (app/payments.py), а не этот файл. Пока настройки ЮKassa не заданы (payments_enabled()
 == False), кнопка показывает прежнее сообщение «оплата скоро».
 
-Хендлеры admin:confirm:/admin:reject: остались от отключённой 11.10.2026 fallback-оплаты
-и недостижимы (admin_payment_keyboard нигде не показывается); их активационный блок
-продублирован в app/payments.py — кандидаты на удаление.
+Хендлеры admin:confirm:/admin:reject: (остатки отключённой 11.10.2026 fallback-оплаты)
+удалены 19.10.2026; активацию подписки выполняет app/payments.py.
 
 См. docs/commercial/bot.md, раздел "Сценарий: покупка тарифа".
 """
-import datetime as dt
 import logging
 
 from aiogram import Router, F
 from aiogram.types import CallbackQuery
 from sqlalchemy import select
 
-from app.config import ADMIN_IDS, REALITY_INBOUND_ID, SUB_BASE_URL
 from app.db.base import async_session
-from app.db.models import User, Plan, Subscription, Payment
+from app.db.models import Plan
 from app.db.seed import TRIAL_PLAN_NAME
 from app.handlers.start import require_consent, CONSENT_TEXT
 from app.keyboards import tariffs_menu, plan_detail_keyboard, consent_keyboard, pay_keyboard
-from app.panel_api import PanelApiClient, PanelApiError
 from app.payments import ActiveSubscriptionError, payments_enabled, start_payment
 from app.yookassa_api import YooKassaError
 
@@ -120,118 +116,3 @@ async def cb_plan_order(callback: CallbackQuery) -> None:
         "подписка придёт сюда автоматически.",
         reply_markup=pay_keyboard(url),
     )
-
-
-@router.callback_query(F.data.startswith("admin:confirm:"))
-async def cb_admin_confirm(callback: CallbackQuery) -> None:
-    # 11.10.2026: недостижимо из текущего кода бота (fallback отключён), оставлено
-    # для переиспользования после интеграции вебхука ЮKassa — см. шапку файла.
-    if callback.from_user.id not in ADMIN_IDS:
-        await callback.answer("Недостаточно прав.", show_alert=True)
-        return
-    await callback.answer()
-    payment_id = int(callback.data.removeprefix("admin:confirm:"))
-
-    sub_url = None
-    error_text = None
-    user_tg_id = None
-
-    async with async_session() as session:
-        payment = await session.get(Payment, payment_id)
-        if payment is None or payment.status != "pending":
-            await callback.message.answer("Заявка не найдена или уже обработана.")
-            return
-
-        subscription = await session.get(Subscription, payment.subscription_id)
-        plan = await session.get(Plan, subscription.plan_id)
-        user = await session.get(User, payment.user_id)
-        user_tg_id = user.tg_id
-
-        now = dt.datetime.utcnow()
-        end_at = now + dt.timedelta(days=plan.duration_days)
-        email = f"tg{user.tg_id}-sub{subscription.id}@netru.bot"
-
-        panel = PanelApiClient()
-        try:
-            await panel.add_client(
-                email=email,
-                limit_ip=plan.device_count,
-                total_gb=0,
-                expiry_time_ms=int(end_at.timestamp() * 1000),
-                inbound_ids=[REALITY_INBOUND_ID],
-                tg_id=user.tg_id,
-                comment=f"bot:paid:sub{subscription.id}",
-            )
-            client_data = await panel.get_client(email)
-            client = client_data["client"]
-            sub_id = client.get("subId")
-            if sub_id and SUB_BASE_URL:
-                sub_url = f"{SUB_BASE_URL}{sub_id}"
-
-            subscription.panel_client_email = email
-            subscription.panel_client_uuid = client.get("uuid")
-            subscription.panel_client_sub_id = sub_id
-            subscription.inbound_ids = [REALITY_INBOUND_ID]
-            subscription.start_at = now
-            subscription.end_at = end_at
-            subscription.status = "active"
-            payment.status = "confirmed"
-            await session.commit()
-        except PanelApiError as exc:
-            error_text = str(exc)
-        finally:
-            await panel.close()
-
-    if error_text:
-        await callback.message.answer(
-            f"Ошибка при создании клиента на панели: {error_text}\n"
-            f"Payment ID {payment_id} остаётся в статусе pending, повторите вручную."
-        )
-        return
-
-    await callback.message.edit_text(callback.message.text + "\n\n ✅ ПОДТВЕРЖДЕНО")
-
-    if sub_url:
-        text = f"Оплата подтверждена! Ваша подписка активна.\n\nСсылка на подписку:\n{sub_url}"
-    else:
-        text = (
-            "Оплата подтверждена, подписка создана, но не удалось сформировать ссылку "
-            "автоматически. Обратитесь в поддержку."
-        )
-    try:
-        await callback.bot.send_message(user_tg_id, text)
-    except Exception:
-        pass
-
-
-@router.callback_query(F.data.startswith("admin:reject:"))
-async def cb_admin_reject(callback: CallbackQuery) -> None:
-    # 11.10.2026: недостижимо из текущего кода бота (fallback отключён), см. шапку файла.
-    if callback.from_user.id not in ADMIN_IDS:
-        await callback.answer("Недостаточно прав.", show_alert=True)
-        return
-    await callback.answer()
-    payment_id = int(callback.data.removeprefix("admin:reject:"))
-
-    user_tg_id = None
-    async with async_session() as session:
-        payment = await session.get(Payment, payment_id)
-        if payment is None or payment.status != "pending":
-            await callback.message.answer("Заявка не найдена или уже обработана.")
-            return
-        subscription = await session.get(Subscription, payment.subscription_id)
-        user = await session.get(User, payment.user_id)
-        user_tg_id = user.tg_id
-
-        payment.status = "rejected"
-        subscription.status = "rejected"
-        await session.commit()
-
-    await callback.message.edit_text(callback.message.text + "\n\n ❌ ОТКЛОНЕНО")
-    try:
-        await callback.bot.send_message(
-            user_tg_id,
-            "Ваша заявка на оплату отклонена. Если это ошибка — обратитесь в поддержку.",
-        )
-    except Exception:
-        pass
