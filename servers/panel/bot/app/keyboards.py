@@ -13,14 +13,17 @@ def consent_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
-def main_menu() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
+def main_menu(is_admin: bool = False) -> InlineKeyboardMarkup:
+    rows = [
         [InlineKeyboardButton(text="🎁 Попробовать бесплатно", callback_data="menu:trial")],
         [InlineKeyboardButton(text="💳 Тарифы", callback_data="menu:tariffs")],
         [InlineKeyboardButton(text="📱 Мои подписки", callback_data="menu:subs")],
         [InlineKeyboardButton(text="👥 Реферальная ссылка", callback_data="menu:ref")],
         [InlineKeyboardButton(text="📞 Поддержка", callback_data="menu:support")],
-    ])
+    ]
+    if is_admin:
+        rows.append([InlineKeyboardButton(text="🛠 Админ", callback_data="adm:menu")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def tariffs_menu(plans) -> InlineKeyboardMarkup:
@@ -69,3 +72,21 @@ def subscriptions_keyboard(links: list[tuple[str, str]]) -> InlineKeyboardMarkup
     rows = [[InlineKeyboardButton(text=f"🔗 Открыть: {name}", url=url)] for name, url in links]
     rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:back")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_menu_keyboard() -> InlineKeyboardMarkup:
+    """Меню администратора, см. app/handlers/admin.py (доступ — только ADMIN_IDS)."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📊 Статистика", callback_data="adm:stats")],
+        [InlineKeyboardButton(text="💳 Последние платежи", callback_data="adm:payments")],
+        [InlineKeyboardButton(text="🧾 Чеки к выдаче", callback_data="adm:receipts")],
+        [InlineKeyboardButton(text="📩 Обращения", callback_data="adm:support")],
+        [InlineKeyboardButton(text="🩺 Проверка Panel", callback_data="adm:panel")],
+        [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="menu:back")],
+    ])
+
+
+def admin_back_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⬅️ Админ-меню", callback_data="adm:menu")],
+    ])

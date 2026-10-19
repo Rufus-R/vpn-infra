@@ -13,6 +13,7 @@ from sqlalchemy import select
 
 from app.db.base import async_session
 from app.db.models import User
+from app.config import ADMIN_IDS
 from app.keyboards import main_menu, consent_keyboard
 
 router = Router()
@@ -75,7 +76,8 @@ async def cmd_start(message: Message, command: CommandObject) -> None:
     if not user.privacy_accepted:
         await message.answer(CONSENT_TEXT, reply_markup=consent_keyboard())
         return
-    await message.answer("С возвращением! Выберите действие:", reply_markup=main_menu())
+    await message.answer("С возвращением! Выберите действие:",
+                         reply_markup=main_menu(is_admin=message.from_user.id in ADMIN_IDS))
 
 
 @router.callback_query(F.data == "consent:accept")
@@ -90,7 +92,8 @@ async def cb_consent_accept(callback: CallbackQuery) -> None:
         user.privacy_accepted = True
         user.privacy_accepted_at = dt.datetime.utcnow()
         await session.commit()
-    await callback.message.answer("Спасибо! Выберите действие:", reply_markup=main_menu())
+    await callback.message.answer("Спасибо! Выберите действие:",
+                                  reply_markup=main_menu(is_admin=callback.from_user.id in ADMIN_IDS))
 
 
 @router.callback_query(F.data == "menu:back")
@@ -100,7 +103,8 @@ async def cb_back(callback: CallbackQuery) -> None:
     if user is None:
         await callback.message.answer(CONSENT_TEXT, reply_markup=consent_keyboard())
         return
-    await callback.message.answer("Выберите действие:", reply_markup=main_menu())
+    await callback.message.answer("Выберите действие:",
+                                  reply_markup=main_menu(is_admin=callback.from_user.id in ADMIN_IDS))
 
 
 @router.callback_query(F.data == "menu:ref")
