@@ -52,7 +52,14 @@ class PanelApiClient:
 
     async def _call(self, method: str, path: str, **kwargs) -> dict:
         resp = await self._client.request(method, path, **kwargs)
-        resp.raise_for_status()  # сетевой/авторизационный уровень
+        try:
+            resp.raise_for_status()  # сетевой/авторизационный уровень
+        except httpx.HTTPStatusError:
+            # str() исходного исключения содержит полный URL с секретным webBasePath
+            raise httpx.HTTPStatusError(
+                f"Panel HTTP {resp.status_code}: {method} {path}",
+                request=resp.request, response=resp,
+            ) from None
         data = resp.json()
         if not data.get("success", False):
             raise PanelApiError(f"{path}: {data.get('msg')!r}")
