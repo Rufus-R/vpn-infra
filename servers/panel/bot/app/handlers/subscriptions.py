@@ -57,14 +57,15 @@ async def cb_subs(callback: CallbackQuery) -> None:
             .join(Plan, Subscription.plan_id == Plan.id)
             .where(Subscription.user_id == user.id)
             .where(Subscription.status.in_(["trial", "active"]))
+            .where(Subscription.end_at > dt.datetime.utcnow())
             .order_by(Subscription.end_at.desc())
         )
         rows = result.all()
 
     if not rows:
         await callback.message.answer(
-            "У вас пока нет подписок. Попробуйте бесплатный период или выберите тариф "
-            "в главном меню."
+            "Действующих подписок нет. Тарифы и бесплатный пробный период "
+            "(если вы ещё не использовали его) — в главном меню."
         )
         return
 
