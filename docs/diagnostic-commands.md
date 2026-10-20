@@ -223,9 +223,11 @@ systemctl is-active x-ui nginx netru-bot certbot.timer
 
 Путь: клиент → S_RU:443 → (RU direct | S2:10001 → интернет). Если RU-сайты показывают IP S2 — проверить routing S_RU (раздел «Версия Xray и geo-split» выше).
 
-## Panel: sqlite3 CLI отсутствует — использовать python3
+## Panel: чтение `bot.db` — `sqlite3` CLI и запасной путь через python3
 
-Обнаружено 11.10.2026: на Panel (проверено на старом `31.77.173.218`; на новом `31.77.78.144` не проверялось) нет системного пакета `sqlite3`
+На новом Panel `31.77.78.144` CLI `sqlite3` есть (проверено 20.10.2026: `sqlite3 /opt/netru-bot/bot.db 'SELECT version_num FROM alembic_version;'` вернул `0003`). Запасной способ ниже описан по прежнему Panel, где пакета не было.
+
+Обнаружено 11.10.2026: на Panel (на старом `31.77.173.218`, удалён 20.10.2026) не было системного пакета `sqlite3`
 (CLI-клиент), хотя Python-драйвер `sqlite3` (стандартная библиотека) доступен.
 Команда `sqlite3 <файл> '<SQL>'` вернёт `bash: sqlite3: command not found`.
 
