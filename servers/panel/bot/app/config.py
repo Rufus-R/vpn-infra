@@ -80,3 +80,9 @@ YOOKASSA_WEBHOOK_SECRET = os.environ.get("YOOKASSA_WEBHOOK_SECRET")
 YOOKASSA_RETURN_URL = os.environ.get("YOOKASSA_RETURN_URL")
 # Локальный порт aiohttp-сервера вебхука в процессе бота (8711 свободен, проверено 18.10.2026).
 WEBHOOK_PORT = int(os.environ.get("WEBHOOK_PORT", "8711"))
+
+# Чеки через «Мой налог» (см. docs/checkpoint-2026-10-17-payments.md, разделы 19–21).
+# Необязательно при импорте: пока не задано, выпуск чеков не включён, остальные разделы бота
+# работают как раньше. Каталог содержит token.json и device_id (создаются скриптом
+# scripts/nalog_login.py; права каталога 700, файлов 600; вне git).
+NALOG_STATE_DIR = os.environ.get("NALOG_STATE_DIR")
