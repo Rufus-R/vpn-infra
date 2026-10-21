@@ -223,6 +223,8 @@ systemctl is-active x-ui nginx netru-bot certbot.timer
 
 Путь: клиент → S_RU:443 → (RU direct | S2:10001 → интернет). Если RU-сайты показывают IP S2 — проверить routing S_RU (раздел «Версия Xray и geo-split» выше).
 
+Резервный вход AmneziaWG (S_RU:443/udp, зафиксирован 20.10.2026): ожидаемые результаты те же. Проверено оператором 20.10.2026 через приложение AmneziaWG: 2ip.io — `77.105.161.151`, yandex.ru/internet — `31.77.169.67`. Ссылку подписки приложение не принимает, нужна конфигурация. Состояние (только чтение): на S_RU `ss -lunp | grep -E ':443\b'` — ожидается `x-ui` на 443/udp, `ufw status numbered | grep 443` — правила 443/udp (v4 и v6); на Panel `sqlite3 -header /etc/x-ui/x-ui.db 'SELECT id,remark,port,protocol,node_id,exclude_from_sub FROM inbounds;'` — инбаунд `AmneziaWG` (id 7, `amneziawg`, 443, `node_id` как у `reality-entry`).
+
 ## Panel: чтение `bot.db` — `sqlite3` CLI и запасной путь через python3
 
 На новом Panel `31.77.78.144` CLI `sqlite3` есть (проверено 20.10.2026: `sqlite3 /opt/netru-bot/bot.db 'SELECT version_num FROM alembic_version;'` вернул `0003`). Запасной способ ниже описан по прежнему Panel, где пакета не было.
