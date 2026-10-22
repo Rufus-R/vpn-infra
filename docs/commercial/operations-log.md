@@ -253,3 +253,5 @@ geo-split, тест `testS2`, Hiddify/sing-box) вынесен в
 - В Panel настройки маршрутизации подписки выключены и пусты (`subEnableRouting`, `subRoutingRules`, `subJsonEnable`, `subJsonRoutingRules`, `subIncyEnableRouting`); есть группы настроек Happ (`subHapp*`) и Incy (`subIncy*`).
 - Тест на одном устройстве (Happ, ссылка `happ://routing/onadd/…`): профиль `domain:gosuslugi.ru` → direct с гео-файлами RoscomVPN (jsDelivr) — Госуслуги открылись с предупреждением о VPN; вариант с гео-файлами GitHub — ошибка загрузки гео-файлов.
 - Не изменялось: серверы, Panel, подписки. Решение по объёму профиля для Panel — `next-session-todo.md`, раздел 5.
+
+- Позже 21.10.2026: бэкап `x-ui.db` на Panel (`/root/x-ui.db.bak-20261021-pre-happ-routing`, integrity ok, права 600); в Panel (Настройки → Подписка → Happ) включена маршрутизация и вставлена ссылка минимального профиля `Shtil-direct` (сборка — `servers/panel/happ-routing/build_profile.py`, список — `direct-domains.txt`). Заголовок `routing` отдаётся при любом User-Agent. Приём профиля устройствами не проверен. Продолжение — `checkpoint-2026-10-21-routing.md`.
