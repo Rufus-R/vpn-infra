@@ -1,7 +1,9 @@
 """Схема БД бота — см. docs/commercial/bot.md, раздел 'Схема данных'."""
 from __future__ import annotations
 import datetime as dt
-from sqlalchemy import String, Integer, BigInteger, Boolean, ForeignKey, DateTime, Index, JSON
+from sqlalchemy import (
+    String, Integer, BigInteger, Boolean, ForeignKey, DateTime, Index, JSON, UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 
@@ -40,14 +42,21 @@ class Plan(Base):
     device_count: Mapped[int] = mapped_column(Integer)  # -> limitIp при создании клиента
     price: Mapped[int] = mapped_column(Integer)  # в копейках
     discount_pct: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    # Добавлено 09.10.2026 для раздела "Тарифы" (UI-текст карточки). Существующая таблица
-    # "plans" на Panel не содержит эту колонку физически — добавляется идемпотентной
-    # dev-миграцией в db/base.py при старте (ALTER TABLE ... ADD COLUMN), до Alembic.
+    # Добавлено 09.10.2026 для раздела "Тарифы" (UI-текст карточки).
     description: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Миграция 0004 (22.10.2026): бонус рефереру за первую оплату приглашённого, в днях.
+    # Меняется правкой строки в БД без деплоя кода.
+    referral_bonus_days: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 
 class Subscription(Base):
+    """С миграцией 0004 — одна строка на пользователя (UNIQUE user_id): состояние его
+    единственного клиента Panel (триал, платная подписка и продления — один клиент и один
+    subId). plan_id — последний купленный тариф; end_at — зеркало срока на Panel.
+    next_device_count/next_device_at — отложенное понижение лимита устройств (когда
+    следующий тариф меньше текущего лимита): применяется по окончании оплаченного периода."""
     __tablename__ = "subscriptions"
+    __table_args__ = (UniqueConstraint("user_id", name="uq_subscriptions_user_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
@@ -61,11 +70,17 @@ class Subscription(Base):
     # trial/active/expired/pending_payment/rejected (свободная строка, без enum —
     # см. комментарий в handlers/tariffs.py про fallback-оплату, 09.10.2026)
     status: Mapped[str] = mapped_column(String(16), default="trial")
+    next_device_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    next_device_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
 
     user: Mapped[User] = relationship(back_populates="subscriptions")
 
 
 class Payment(Base):
+    """plan_id и target_end_at — миграция 0004: тариф хранится в самом платеже (заказ больше
+    не создаёт строку Subscription); target_end_at — абсолютная дата окончания, которая
+    считается ОДИН раз при захвате платежа (до вызова Panel), чтобы повторная сверка после
+    paid_failed не прибавляла срок второй раз."""
     __tablename__ = "payments"
     __table_args__ = (
         Index("uq_payments_provider_payment_id", "provider_payment_id", unique=True),
@@ -74,6 +89,9 @@ class Payment(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     subscription_id: Mapped[int | None] = mapped_column(ForeignKey("subscriptions.id"), nullable=True)
+    plan_id: Mapped[int | None] = mapped_column(
+        ForeignKey("plans.id", name="fk_payments_plan_id_plans"), nullable=True)
+    target_end_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
     amount: Mapped[int] = mapped_column(Integer)  # в копейках
     provider: Mapped[str] = mapped_column(String(16))  # manual/yookassa
     provider_payment_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
@@ -84,13 +102,32 @@ class Payment(Base):
 
 
 class ReferralBonus(Base):
+    """UNIQUE(referred_id) (миграция 0004): бонус за приглашённого начисляется один раз."""
     __tablename__ = "referral_bonuses"
+    __table_args__ = (UniqueConstraint("referred_id", name="uq_referral_bonuses_referred_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     referrer_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     referred_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     bonus_days: Mapped[int] = mapped_column(Integer)
     granted_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)
+
+
+class LinkedClient(Base):
+    """Ручные клиенты Panel, привязанные к Telegram-пользователю (миграция 0004). Клиент
+    остаётся со своим email и ссылкой; «Мои подписки» показывает его рядом со своей
+    подпиской. Строки вставляются вручную после /start человека. Срок таких клиентов ботом
+    не меняется."""
+    __tablename__ = "linked_clients"
+    __table_args__ = (
+        UniqueConstraint("user_id", "panel_client_email", name="uq_linked_clients_user_email"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    panel_client_email: Mapped[str] = mapped_column(String(128))
+    label: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)
 
 
 class SupportMessage(Base):

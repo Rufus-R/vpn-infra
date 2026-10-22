@@ -1,12 +1,12 @@
 """Раздел «Тарифы».
 
 Кнопка «💳 Оформить заказ» создаёт платёж ЮKassa (app/payments.py, start_payment) и
-показывает кнопку со ссылкой на оплату; подписку выдаёт обработка вебхука/сверки
-(app/payments.py), а не этот файл. Пока настройки ЮKassa не заданы (payments_enabled()
-== False), кнопка показывает прежнее сообщение «оплата скоро».
+показывает кнопку со ссылкой на оплату; подписку выдаёт или продлевает обработка
+вебхука/сверки (app/payments.py), а не этот файл. Пока настройки ЮKassa не заданы
+(payments_enabled() == False), кнопка показывает прежнее сообщение «оплата скоро».
 
-Хендлеры admin:confirm:/admin:reject: (остатки отключённой 11.10.2026 fallback-оплаты)
-удалены 19.10.2026; активацию подписки выполняет app/payments.py.
+С 22.10.2026 действующая подписка не блокирует новый заказ: оплата продлевает срок
+(один клиент на пользователя, ссылка не меняется).
 
 См. docs/commercial/bot.md, раздел "Сценарий: покупка тарифа".
 """
@@ -21,7 +21,7 @@ from app.db.models import Plan
 from app.db.seed import TRIAL_PLAN_NAME
 from app.handlers.start import require_consent, CONSENT_TEXT
 from app.keyboards import tariffs_menu, plan_detail_keyboard, consent_keyboard, pay_keyboard
-from app.payments import ActiveSubscriptionError, payments_enabled, start_payment
+from app.payments import payments_enabled, start_payment
 from app.yookassa_api import YooKassaError
 
 router = Router()
@@ -30,7 +30,10 @@ logger = logging.getLogger("tariffs")
 
 def _payment_note() -> str:
     if payments_enabled():
-        return "Оплата через ЮKassa. После оплаты подписка активируется автоматически."
+        return (
+            "Оплата через ЮKassa. После оплаты подписка активируется автоматически; "
+            "если у вас уже есть действующая подписка, срок продлевается, ссылка не меняется."
+        )
     return (
         "Онлайн-оплата через ЮKassa (с автоматическим чеком) подключается — "
         "совсем скоро можно будет оформить заказ прямо здесь."
@@ -98,13 +101,6 @@ async def cb_plan_order(callback: CallbackQuery) -> None:
     plan_id = int(callback.data.removeprefix("plan:paid:"))
     try:
         url = await start_payment(user.tg_id, plan_id)
-    except ActiveSubscriptionError as exc:
-        await callback.message.answer(
-            f"У вас уже есть действующая платная подписка (до {exc.active_until:%d.%m.%Y}). "
-            "Новый заказ пока оформить нельзя — продление появится позже. "
-            "Ссылку на подписку можно открыть в разделе «📱 Мои подписки»."
-        )
-        return
     except (YooKassaError, ValueError):
         logger.exception("не удалось создать платёж: tg_id=%s plan_id=%s", user.tg_id, plan_id)
         await callback.message.answer(

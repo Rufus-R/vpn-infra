@@ -6,40 +6,39 @@
 закрыт по времени, поздний платёж всё равно обрабатывается); mismatch (ответ ЮKassa не
 совпал с локальной строкой — разбирает админ).
 
+С 22.10.2026 (миграция 0004): заказ создаёт только строку Payment с plan_id (строки
+Subscription больше нет: одна подписка и один клиент Panel на пользователя, см.
+app/subscription_service.py). Целевая дата окончания (payments.target_end_at) считается ОДИН
+раз при захвате платежа и сохраняется до обращения к Panel — повтор после сбоя выставит ту же
+абсолютную дату, срок не прибавится дважды. Новая покупка при действующей подписке — продление.
+
 Решение о деньгах принимается только по ответу GET /payments/{id}: тело вебхука не
 подписано и ему не доверяем. Обработка одного платежа защищена _IN_FLIGHT (бот — один
-процесс) и переходом статуса; активация идемпотентна (клиент с итоговым email уже на Panel
--> add_client не повторяется).
+процесс), блокировкой пользователя и переходом статуса.
 """
 from __future__ import annotations
 import asyncio
 import datetime as dt
 import logging
-import time
 
 import httpx
 from aiogram import Bot
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from app.config import (
-    ADMIN_IDS, REALITY_INBOUND_ID, SUB_BASE_URL, YOOKASSA_RETURN_URL,
-    YOOKASSA_SECRET_KEY_FILE, YOOKASSA_SHOP_ID, YOOKASSA_WEBHOOK_SECRET,
+    ADMIN_IDS, YOOKASSA_RETURN_URL, YOOKASSA_SECRET_KEY_FILE, YOOKASSA_SHOP_ID,
+    YOOKASSA_WEBHOOK_SECRET,
 )
 from app.db.base import async_session
-from app.db.models import Payment, Plan, Receipt, Subscription, User
+from app.db.models import Payment, Plan, Receipt, User
 from app.panel_api import PanelApiClient, PanelApiError
+from app.subscription_service import (
+    apply_due_downgrades, apply_period, compute_target_end, save_subscription, user_lock,
+)
+from app.timeutil import fmt_msk
 from app.yookassa_api import YooKassaClient, YooKassaError, kopecks_from_amount
 
 logger = logging.getLogger("payments")
-
-
-class ActiveSubscriptionError(Exception):
-    """У пользователя уже есть действующая платная подписка — новый заказ не создаётся
-    (вариант B, docs/checkpoint-2026-10-17-payments.md, раздел 12, находка 2)."""
-
-    def __init__(self, active_until: dt.datetime) -> None:
-        super().__init__(f"активная платная подписка до {active_until:%Y-%m-%d}")
-        self.active_until = active_until
 
 REUSE_MAX_AGE = dt.timedelta(minutes=30)
 NO_PROVIDER_ID_EXPIRE_AFTER = dt.timedelta(minutes=30)
@@ -65,7 +64,8 @@ async def _notify_admins(bot: Bot, text: str) -> None:
 
 async def start_payment(tg_id: int, plan_id: int) -> str:
     """Вернуть ссылку на оплату тарифа. Свежий pending того же пользователя и тарифа
-    переиспользуется (ссылка берётся GET-запросом к ЮKassa), иначе создаётся новый платёж."""
+    переиспользуется (ссылка берётся GET-запросом к ЮKassa), иначе создаётся новый платёж.
+    Действующая подписка не мешает: оплата продлевает срок."""
     if not YOOKASSA_RETURN_URL:
         raise YooKassaError("ЮKassa не настроена: задайте YOOKASSA_RETURN_URL")
     yk = YooKassaClient()
@@ -77,29 +77,15 @@ async def start_payment(tg_id: int, plan_id: int) -> str:
             plan = await session.get(Plan, plan_id)
             if plan is None or plan.price <= 0:
                 raise ValueError("тариф недоступен для оплаты")
-            # Блокировка новой покупки при действующей платной подписке. Строим по end_at:
-            # статус expired в коде нигде не выставляется. Уже созданные заказы это не
-            # затрагивает — _activate_locked проверку не вызывает.
-            active_until = (await session.execute(
-                select(func.max(Subscription.end_at)).where(
-                    Subscription.user_id == user.id,
-                    Subscription.status == "active",
-                    Subscription.end_at > dt.datetime.utcnow(),
-                )
-            )).scalar_one_or_none()
-            if active_until is not None:
-                raise ActiveSubscriptionError(active_until)
             reusable = (await session.execute(
                 select(Payment)
-                .join(Subscription, Payment.subscription_id == Subscription.id)
                 .where(
                     Payment.user_id == user.id,
                     Payment.provider == "yookassa",
                     Payment.status == "pending",
                     Payment.provider_payment_id.is_not(None),
                     Payment.created_at > dt.datetime.utcnow() - REUSE_MAX_AGE,
-                    Subscription.plan_id == plan.id,
-                    Subscription.status == "pending_payment",
+                    Payment.plan_id == plan.id,
                 )
                 .order_by(Payment.id.desc())
                 .limit(1)
@@ -117,25 +103,14 @@ async def start_payment(tg_id: int, plan_id: int) -> str:
 
 
 async def _create_new(yk: YooKassaClient, user: User, plan: Plan) -> str:
-    now = dt.datetime.utcnow()
     async with async_session() as session:
-        subscription = Subscription(
-            user_id=user.id,
-            panel_client_email=f"pending-tg{user.tg_id}-{int(time.time() * 1000)}@netru.bot",
-            plan_id=plan.id,
-            start_at=now,
-            end_at=now + dt.timedelta(days=plan.duration_days),
-            status="pending_payment",
-        )
-        session.add(subscription)
-        await session.flush()
         payment = Payment(
-            user_id=user.id, subscription_id=subscription.id, amount=plan.price,
+            user_id=user.id, plan_id=plan.id, amount=plan.price,
             provider="yookassa", status="pending",
         )
         session.add(payment)
         await session.commit()
-        local_id, subscription_id = payment.id, subscription.id
+        local_id = payment.id
 
     try:
         data = await yk.create_payment(
@@ -150,13 +125,13 @@ async def _create_new(yk: YooKassaClient, user: User, plan: Plan) -> str:
         # Сетевая ошибка/таймаут (status_code is None): платёж мог быть создан, строку не
         # трогаем — найдётся по metadata.payment_id, пустые pending чистит сверка.
         if exc.status_code is not None:
-            await _abort_new(local_id, subscription_id)
+            await _abort_new(local_id)
         raise
 
     provider_id = data.get("id")
     url = (data.get("confirmation") or {}).get("confirmation_url")
     if not provider_id or not url:
-        await _abort_new(local_id, subscription_id)
+        await _abort_new(local_id)
         raise YooKassaError("в ответе ЮKassa нет id платежа или confirmation_url")
 
     async with async_session() as session:
@@ -166,15 +141,12 @@ async def _create_new(yk: YooKassaClient, user: User, plan: Plan) -> str:
     return url
 
 
-async def _abort_new(payment_id: int, subscription_id: int) -> None:
+async def _abort_new(payment_id: int) -> None:
     async with async_session() as session:
         payment = await session.get(Payment, payment_id)
-        subscription = await session.get(Subscription, subscription_id)
         if payment is not None and payment.status == "pending" \
                 and payment.provider_payment_id is None:
             payment.status = "canceled"
-        if subscription is not None and subscription.status == "pending_payment":
-            subscription.status = "rejected"
         await session.commit()
 
 
@@ -242,16 +214,12 @@ async def _mark_mismatch(bot: Bot, payment_id: int, provider_payment_id: str) ->
 
 
 async def _mark_canceled(bot: Bot, payment_id: int) -> None:
-    user_tg_id = None
     async with async_session() as session:
         payment = await session.get(Payment, payment_id)
         if payment is None or payment.status not in ("pending", "expired"):
             return
-        subscription = await session.get(Subscription, payment.subscription_id)
         user = await session.get(User, payment.user_id)
         payment.status = "canceled"
-        if subscription is not None and subscription.status == "pending_payment":
-            subscription.status = "rejected"
         user_tg_id = user.tg_id
         await session.commit()
     await _notify(bot, user_tg_id, "Платёж отменён, подписка не оформлена. "
@@ -269,37 +237,50 @@ async def _activate(bot: Bot, payment_id: int) -> None:
 
 
 async def _activate_locked(bot: Bot, payment_id: int) -> None:
+    async with async_session() as session:
+        payment = await session.get(Payment, payment_id)
+        if payment is None:
+            return
+        user_id = payment.user_id
+    # Все операции одного пользователя (триал, оплата, понижение лимита) идут по очереди:
+    # срок считается от актуального состояния клиента на Panel.
+    async with user_lock(user_id):
+        await _activate_in_lock(bot, payment_id)
+
+
+async def _activate_in_lock(bot: Bot, payment_id: int) -> None:
     sub_url = None
     async with async_session() as session:
         payment = await session.get(Payment, payment_id)
         if payment is None or payment.status not in _CLAIMABLE:
             return
         previous_status = payment.status
-        subscription = await session.get(Subscription, payment.subscription_id)
-        plan = await session.get(Plan, subscription.plan_id)
         user = await session.get(User, payment.user_id)
+        plan = await session.get(Plan, payment.plan_id) if payment.plan_id is not None else None
+        if plan is None:
+            payment.status = "paid_failed"
+            await session.commit()
+            logger.error("payment %s: у платежа нет тарифа (plan_id)", payment_id)
+            if previous_status != "paid_failed":
+                await _notify_admins(
+                    bot,
+                    f"⚠️ Платёж {payment_id} оплачен, но тариф не определён (plan_id пуст) — "
+                    "требуется ручной разбор.",
+                )
+            return
         payment.status = "processing"
         await session.commit()
 
-        email = f"tg{user.tg_id}-sub{subscription.id}@netru.bot"
-        now = dt.datetime.utcnow()
-        end_at = now + dt.timedelta(days=plan.duration_days)
-
         panel = PanelApiClient()
         try:
-            if REALITY_INBOUND_ID is None:
-                raise PanelApiError("REALITY_INBOUND_ID не задан")
-            if not await panel.client_exists(email):
-                await panel.add_client(
-                    email=email,
-                    limit_ip=plan.device_count,
-                    total_gb=0,
-                    expiry_time_ms=int(end_at.timestamp() * 1000),
-                    inbound_ids=[REALITY_INBOUND_ID],
-                    tg_id=user.tg_id,
-                    comment=f"bot:paid:sub{subscription.id}",
-                )
-            client = (await panel.get_client(email))["client"]
+            if payment.target_end_at is None:
+                # Считается один раз и сохраняется ДО вызова Panel.
+                payment.target_end_at = await compute_target_end(
+                    panel, user.tg_id, plan.duration_days)
+                await session.commit()
+            target = payment.target_end_at
+            result = await apply_period(
+                panel, user=user, plan=plan, target_end_at=target, kind="paid")
         except (PanelApiError, httpx.HTTPError) as exc:
             payment.status = "paid_failed"
             await session.commit()
@@ -314,16 +295,9 @@ async def _activate_locked(bot: Bot, payment_id: int) -> None:
         finally:
             await panel.close()
 
-        sub_id = client.get("subId")
-        if sub_id and SUB_BASE_URL:
-            sub_url = f"{SUB_BASE_URL}{sub_id}"
-        subscription.panel_client_email = email
-        subscription.panel_client_uuid = client.get("uuid")
-        subscription.panel_client_sub_id = sub_id
-        subscription.inbound_ids = [REALITY_INBOUND_ID]
-        subscription.start_at = now
-        subscription.end_at = end_at
-        subscription.status = "active"
+        subscription = await save_subscription(session, user, plan, result, target, "paid")
+        await session.flush()
+        payment.subscription_id = subscription.id
         payment.status = "confirmed"
         has_receipt = (await session.execute(
             select(Receipt.id).where(Receipt.payment_id == payment.id)
@@ -335,12 +309,19 @@ async def _activate_locked(bot: Bot, payment_id: int) -> None:
             ))
         await session.commit()
         user_tg_id, plan_name, amount_rub = user.tg_id, plan.name, payment.amount // 100
+        sub_url = result.sub_url
+        created = result.created
+        downgrade_to, downgrade_base = result.downgrade_to, result.downgrade_base
 
+    head = "Оплата получена, подписка активна" if created else "Оплата получена, подписка продлена"
     if sub_url:
-        text = f"Оплата получена, подписка активна.\n\nСсылка на подписку:\n{sub_url}"
+        text = f"{head} до {fmt_msk(target)} (МСК).\n\nСсылка на подписку:\n{sub_url}"
     else:
-        text = ("Оплата получена, подписка создана, но ссылку сформировать "
+        text = (f"{head} до {fmt_msk(target)} (МСК), но ссылку сформировать "
                 "автоматически не удалось. Обратитесь в поддержку.")
+    if downgrade_to is not None and downgrade_base is not None:
+        text += (f"\n\nЛимит устройств сохранится до {fmt_msk(downgrade_base)} (МСК), "
+                 f"затем станет {downgrade_to}.")
     await _notify(bot, user_tg_id, text)
     await _notify_admins(
         bot,
@@ -364,10 +345,10 @@ async def reconcile_once(bot: Bot) -> None:
             if payment.status == "pending":
                 if payment.provider_payment_id is None:
                     if age > NO_PROVIDER_ID_EXPIRE_AFTER:
-                        await _expire(session, payment)
+                        payment.status = "expired"
                     continue
                 if age > PENDING_EXPIRE_AFTER:
-                    await _expire(session, payment)
+                    payment.status = "expired"
                     continue
                 if age < PENDING_RECONCILE_AFTER:
                     continue
@@ -382,13 +363,6 @@ async def reconcile_once(bot: Bot) -> None:
             logger.exception("сверка: ошибка по платежу %s", provider_payment_id)
 
 
-async def _expire(session, payment: Payment) -> None:
-    payment.status = "expired"
-    subscription = await session.get(Subscription, payment.subscription_id)
-    if subscription is not None and subscription.status == "pending_payment":
-        subscription.status = "rejected"
-
-
 async def reconcile_loop(bot: Bot) -> None:
     while True:
         try:
@@ -397,6 +371,12 @@ async def reconcile_loop(bot: Bot) -> None:
             raise
         except Exception:
             logger.exception("сверка платежей: сбой цикла")
+        try:
+            await apply_due_downgrades()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("отложенное понижение лимита устройств: сбой цикла")
         await asyncio.sleep(RECONCILE_INTERVAL_SEC)
 
 
