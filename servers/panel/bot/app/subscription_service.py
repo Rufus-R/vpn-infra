@@ -83,7 +83,10 @@ async def apply_period(panel: PanelApiClient, *, user: User, plan: Plan,
                        target_end_at: dt.datetime, kind: str) -> ApplyResult:
     """Создать клиента (если нет) или выставить ему срок target_end_at.
     kind='paid' — оплата (лимит устройств по тарифу), kind='trial' — триал/бонус (лимит
-    существующего клиента не меняется; новому клиенту — по тарифу)."""
+    существующего клиента не меняется; новому клиенту — по тарифу).
+    Поле comment клиента Panel — название тарифа: шаблон примечания подписки показывает его
+    в имени профиля. Новому клиенту оно ставится всегда, существующему — только при оплате
+    (триал и бонус название платного тарифа не затирают)."""
     if kind not in ("paid", "trial"):
         raise ValueError(f"неизвестный kind: {kind}")
     if REALITY_INBOUND_ID is None:
@@ -101,7 +104,7 @@ async def apply_period(panel: PanelApiClient, *, user: User, plan: Plan,
         await panel.add_client(
             email=email, limit_ip=plan.device_count, total_gb=0,
             expiry_time_ms=target_ms, inbound_ids=[REALITY_INBOUND_ID],
-            tg_id=user.tg_id, comment=f"bot:user{user.id}",
+            tg_id=user.tg_id, comment=plan.name,
         )
         created = True
     else:
@@ -121,9 +124,10 @@ async def apply_period(panel: PanelApiClient, *, user: User, plan: Plan,
                     # лимит остаётся до его окончания, понижение — отложенное.
                     downgrade_to = plan.device_count
                     downgrade_base = _from_ms(current_ms)
-            await panel.update_client_safe(
-                email, expiryTime=target_ms, enable=True, limitIp=limit,
-            )
+            changes = {"expiryTime": target_ms, "enable": True, "limitIp": limit}
+            if kind == "paid":
+                changes["comment"] = plan.name
+            await panel.update_client_safe(email, **changes)
 
     client = (await panel.get_client(email))["client"]
     sub_id = client.get("subId")
