@@ -35,6 +35,7 @@ from app.panel_api import PanelApiClient, PanelApiError
 from app.subscription_service import (
     apply_due_downgrades, apply_period, compute_target_end, save_subscription, user_lock,
 )
+from app.referrals import apply_bonus, create_pending_bonus, retry_pending_bonuses
 from app.timeutil import fmt_msk
 from app.yookassa_api import YooKassaClient, YooKassaError, kopecks_from_amount
 
@@ -245,10 +246,12 @@ async def _activate_locked(bot: Bot, payment_id: int) -> None:
     # Все операции одного пользователя (триал, оплата, понижение лимита) идут по очереди:
     # срок считается от актуального состояния клиента на Panel.
     async with user_lock(user_id):
-        await _activate_in_lock(bot, payment_id)
+        bonus_id = await _activate_in_lock(bot, payment_id)
+    if bonus_id is not None:
+        await apply_bonus(bot, bonus_id)
 
 
-async def _activate_in_lock(bot: Bot, payment_id: int) -> None:
+async def _activate_in_lock(bot: Bot, payment_id: int) -> int | None:
     sub_url = None
     async with async_session() as session:
         payment = await session.get(Payment, payment_id)
@@ -307,6 +310,7 @@ async def _activate_in_lock(bot: Bot, payment_id: int) -> None:
                 payment_id=payment.id, status="pending_review",
                 amount=payment.amount, service_name=plan.name,
             ))
+        bonus_id = await create_pending_bonus(session, user, plan, payment)
         await session.commit()
         user_tg_id, plan_name, amount_rub = user.tg_id, plan.name, payment.amount // 100
         sub_url = result.sub_url
@@ -328,6 +332,7 @@ async def _activate_in_lock(bot: Bot, payment_id: int) -> None:
         f"✅ Платёж {payment_id} подтверждён: «{plan_name}», {amount_rub} ₽. "
         "Чек: черновик создан (pending_review), выпуск пока вручную.",
     )
+    return bonus_id
 
 
 async def reconcile_once(bot: Bot) -> None:
@@ -377,6 +382,12 @@ async def reconcile_loop(bot: Bot) -> None:
             raise
         except Exception:
             logger.exception("отложенное понижение лимита устройств: сбой цикла")
+        try:
+            await retry_pending_bonuses(bot)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("реферальные бонусы: сбой цикла")
         await asyncio.sleep(RECONCILE_INTERVAL_SEC)
 
 

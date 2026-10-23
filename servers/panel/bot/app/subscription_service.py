@@ -22,6 +22,12 @@ from app.panel_api import PanelApiClient, PanelApiError
 
 logger = logging.getLogger("subscription_service")
 
+
+class UnlimitedClientError(PanelApiError):
+    """Клиент бессрочный (expiryTime=0): срок автоматически не меняется. Постоянная ошибка, в отличие от
+    сбоев Panel — повторять бесполезно."""
+
+
 # Бот — один процесс, блокировок в памяти достаточно.
 _USER_LOCKS: dict[int, asyncio.Lock] = {}
 
@@ -72,7 +78,7 @@ async def compute_target_end(panel: PanelApiClient, tg_id: int, days: int) -> dt
         client = (await panel.get_client(email))["client"]
         expiry_ms = int(client.get("expiryTime") or 0)
         if expiry_ms <= 0:
-            raise PanelApiError(
+            raise UnlimitedClientError(
                 f"клиент {email} бессрочный (expiryTime=0): срок автоматически не меняется"
             )
         base = max(now, _from_ms(expiry_ms))

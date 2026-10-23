@@ -102,7 +102,10 @@ class Payment(Base):
 
 
 class ReferralBonus(Base):
-    """UNIQUE(referred_id) (миграция 0004): бонус за приглашённого начисляется один раз."""
+    """UNIQUE(referred_id) (миграция 0004): бонус за приглашённого — один раз.
+    Миграция 0005: status (pending/granted/failed) и target_end_at — бонус записывается в
+    транзакции подтверждения платежа и применяется к Panel после; granted_at заполняется
+    при начислении. См. app/referrals.py."""
     __tablename__ = "referral_bonuses"
     __table_args__ = (UniqueConstraint("referred_id", name="uq_referral_bonuses_referred_id"),)
 
@@ -110,7 +113,9 @@ class ReferralBonus(Base):
     referrer_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     referred_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     bonus_days: Mapped[int] = mapped_column(Integer)
-    granted_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)
+    status: Mapped[str] = mapped_column(String(16), default="pending", server_default="pending")
+    target_end_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    granted_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class LinkedClient(Base):
