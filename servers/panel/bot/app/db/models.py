@@ -214,3 +214,26 @@ class BroadcastDelivery(Base):
     status: Mapped[str] = mapped_column(String(16), default="pending")
     error: Mapped[str | None] = mapped_column(String(255), nullable=True)
     sent_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class ReminderDelivery(Base):
+    """Журнал напоминаний об истечении срока — см. app/reminders.py (миграция 0007).
+    UNIQUE(subscription_id, end_at, kind): одно напоминание каждого вида на каждое значение
+    срока (end_at обрезан до секунд); после продления срок меняется и напоминания снова
+    доступны. kind: 3d / 1d. status: sending (запрос в Telegram отправлен, итог ещё не
+    записан) / sent / blocked (бот заблокирован) / failed / unknown (бот перезапустили в
+    состоянии sending — не повторяется автоматически)."""
+    __tablename__ = "reminder_deliveries"
+    __table_args__ = (
+        UniqueConstraint(
+            "subscription_id", "end_at", "kind", name="uq_reminder_deliveries_sub_end_kind"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    subscription_id: Mapped[int] = mapped_column(ForeignKey("subscriptions.id"))
+    end_at: Mapped[dt.datetime] = mapped_column(DateTime)
+    kind: Mapped[str] = mapped_column(String(8))
+    status: Mapped[str] = mapped_column(String(16), default="sending")
+    error: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)
+    sent_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)

@@ -11,6 +11,7 @@ from app.db.base import init_db
 from app.db.seed import seed_defaults
 from app.handlers import router
 from app.payments import payments_enabled, reconcile_loop
+from app.reminders import reminder_loop
 from app.webhook import start_webhook
 
 logging.basicConfig(level=logging.INFO)
@@ -44,6 +45,7 @@ async def main() -> None:
     session = AiohttpSession(proxy=TG_PROXY_URL) if TG_PROXY_URL else AiohttpSession()
     bot = Bot(token=BOT_TOKEN, session=session)
     resume_task = asyncio.create_task(resume_broadcasts(bot))
+    reminder_task = asyncio.create_task(reminder_loop(bot))
 
     runner = None
     reconcile_task = None
@@ -56,6 +58,7 @@ async def main() -> None:
     try:
         await dp.start_polling(bot)
     finally:
+        reminder_task.cancel()
         if reconcile_task is not None:
             reconcile_task.cancel()
         if runner is not None:
