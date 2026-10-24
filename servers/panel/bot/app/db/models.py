@@ -180,3 +180,37 @@ class Receipt(Base):
     error: Mapped[str | None] = mapped_column(String(512), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)
     sent_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class Broadcast(Base):
+    """Рассылка сервисных сообщений — см. app/broadcast.py. status: draft (черновик,
+    редактируется) / sending (получатели зафиксированы, идёт отправка) / done / cancelled.
+    audience — ключ из broadcast.AUDIENCES; created_by — tg_id администратора."""
+    __tablename__ = "broadcasts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    audience: Mapped[str] = mapped_column(String(32))
+    body: Mapped[str] = mapped_column(String(4096))
+    status: Mapped[str] = mapped_column(String(16), default="draft")
+    created_by: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)
+    started_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    finished_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class BroadcastDelivery(Base):
+    """Журнал доставки: UNIQUE(broadcast_id, user_id) — повторной отправки одному
+    получателю не будет. status: pending / sending (запрос в Telegram отправлен, итог ещё
+    не записан) / sent / blocked (бот заблокирован) / failed / unknown (бот перезапустили
+    в состоянии sending — не повторяется автоматически)."""
+    __tablename__ = "broadcast_deliveries"
+    __table_args__ = (
+        UniqueConstraint("broadcast_id", "user_id", name="uq_broadcast_deliveries_broadcast_user"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    broadcast_id: Mapped[int] = mapped_column(ForeignKey("broadcasts.id"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    error: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    sent_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)

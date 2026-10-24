@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 from aiogram import Bot, Dispatcher
 from aiogram.client.session.aiohttp import AiohttpSession
 
+from app.broadcast import resume_broadcasts
 from app.config import BOT_TOKEN, PANEL_API_BASE, TG_PROXY_URL
 from app.db.base import init_db
 from app.db.seed import seed_defaults
@@ -42,6 +43,7 @@ async def main() -> None:
     await seed_defaults()
     session = AiohttpSession(proxy=TG_PROXY_URL) if TG_PROXY_URL else AiohttpSession()
     bot = Bot(token=BOT_TOKEN, session=session)
+    resume_task = asyncio.create_task(resume_broadcasts(bot))
 
     runner = None
     reconcile_task = None
