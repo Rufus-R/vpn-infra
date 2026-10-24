@@ -32,6 +32,7 @@
 - Бэкапы 18–19.10 к удалению через неделю стабильной работы. На Panel: `/root/cleanup-backup-20261018/`, `/opt/netru-bot/bot.db.bak-20261018-pre-block-deploy`, `/opt/netru-bot/bot.db.bak-20261018-pre-yookassa-deploy`, `/root/netru-bot-src-pre-yookassa-20261018.tgz`, `/root/testS2-removal-backup-20261019-081525`, `/root/landing-backup-20261019-113405`. На S2: `/root/testS2-removal-backup-20261019-082011`.
 - Бэкап патча №1 (20.10.2026) к удалению через неделю: на Panel `/root/netru-bot-pre-nalog-patch1-20261020` (содержит копию `.env` с секретами); временные каталоги `/tmp/nalogo-dl` на Panel и `/tmp/nalogo-src` на S1.
 - Бэкапы 19.10 к удалению через неделю стабильной работы: на Panel `/opt/netru-bot/bot.db.bak-20261019-pre-admin-deploy`, `/root/netru-bot-src-pre-admin-20261019.tgz`, `/root/netru-bot-src-pre-end-at-20261019.tgz`, `/root/admin.py.bak-20261019-pre-ru`.
+- Бэкапы 24.10 к удалению через неделю стабильной работы: на Panel `/opt/netru-bot/bot.db.bak-20261024-184156-pre-broadcast-deploy`, `/root/netru-bot-src-pre-broadcast-20261024-184156.tgz`. Бэкапы 22–23.10 (в том числе `/root/backup-20261023-*`, `/opt/netru-bot/bot.db.bak-20261023-*`, `/root/subscription_service.py.bak-20261023-pre-comment`, `/root/x-ui.db.bak-20261023-225430-pre-mars-removal`) — решить судьбу вместе с остальными; бэкап `/root/backup-20261023-pre-test-data-cleanup/bot.db` нужен для отката до `0004`, пока не принято решение о нём.
 - Лендинг (`/var/www/netru-landing/`: `index.html`, `oferta.html`, `privacy.html`, значки подключены 19.10.2026) живёт только на Panel, в git его нет — решить, версионировать ли; оферта и политика: сборка воспроизведена (`/root/commercial-legal/build-pages.py`, описание — `commercial/overview.md`, раздел «Юридические документы и лендинг: сборка и выкладка»), `landing-build/` совпадает с Panel; осталось решить, заменять ли `landing/` на `landing-build/`, и сохранить скрипт и исходники вне одного диска S1 (бэкап).
 
 ### 1.3. DNSSEC (открыт)
@@ -82,6 +83,7 @@
    текстом в чате 08.10.2026 — при желании сменить (порты закрыты `ufw` по IP).
 9. Вживую не проверялись ветки `mismatch` и `paid_failed` (только на заглушках); платёж в статусе `expired` сверка не опрашивает. Закрыто 19.10.2026: маскировка URL в исключениях Panel, фильтр «Мои подписки» по `end_at`, удаление `admin:confirm:`/`admin:reject:` (чекпоинт платежей, раздел 18).
 10. Админ-меню (MVP, 19.10.2026) развивать по практике; предупреждение Python 3.12 про `datetime.utcnow()` (много вызовов в коде) — низкий приоритет.
+11. Рассылка (24.10.2026, `checkpoint-2026-10-24-broadcast.md`) развивать по практике: не проверены аудитория `expiring` с настоящими получателями, возобновление после рестарта и ветки `failed`/`unknown` на реальном Telegram; без кнопок и разметки, рекламные сообщения не поддерживаются (нужно отдельное согласие). Напоминания об истечении подписки (п. 4) можно строить на `expiring` и журнале доставок.
 
 ---
 
