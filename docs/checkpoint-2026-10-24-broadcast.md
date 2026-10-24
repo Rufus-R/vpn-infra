@@ -52,3 +52,50 @@
 - `tariffs.md` переписан по `seed.py` и чекпоинтам 23.10; значения таблицы `plans` на Panel с `seed.py` не сверялись. Комментарий в шапке `seed.py` («синхронизированы с docs/commercial/tariffs.md») устарел — поправить при следующем деплое бота (низкий приоритет).
 - Оферта (`/root/commercial-legal/oferta.md`, вне git) расходится с фактом: п. 4.4 обещает чек «автоматически через ЮKassa» (выбрана схема «Мой налог» с подтверждением админа, не реализована); п. 4.5 обещает, что бот заблаговременно информирует об истечении пробного периода и подписки (функции нет); бонусной программы в оферте нет. До запуска боевого магазина — привести к факту или реализовать обещанное; формулировку решает оператор (правка `.md`, сборка `build-pages.py`, выкладка).
 - Лендинг: названия тарифов на `index.html` совпадают с `seed.py` (проверено `grep`); цены и описания не сверялись.
+
+## Следующая сессия: напоминания об истечении и чеки через «Мой налог» (решение оператора 24.10.2026)
+Две задачи: (1) напоминания об истечении пробного периода и подписки (оферта п. 4.5), (2) выпуск чеков самозанятого через «Мой налог» (схема выбрана 20.10.2026, `checkpoint-2026-10-17-payments.md`, разделы 19–22). Оферту (пп. 4.4 и 4.5) приводить к факту после реализации обеих задач.
+
+### Что уже есть
+- Напоминания: аудитория `expiring` и журнал доставок (`app/broadcast.py`, миграция `0006`), фоновые задачи запускаются в `app/main.py`. Нет: окон напоминаний, дедупликации по подписке, текстов, отдельной таблицы или полей для учёта отправленных напоминаний.
+- Чеки: таблица `receipts` (статус `pending_review` создаётся при подтверждении платежа), меню «🧾 Чеки к выдаче» (только список), патч №1 (`nalogo==1.2.0`, `NALOG_STATE_DIR`, `scripts/nalog_login.py`) задеплоен 20.10.2026. Нет: клиента «Мой налог», переходов статусов `pending_review → sending → sent | failed | unknown`, кнопок админа, ежедневной проверки токена, напоминаний о чеках старше суток.
+- Вход в «Мой налог»: SMS отклонён ФНС (`auth.sms.restricted`); оператор получил ИНН и пароль (23.10.2026, в документации не хранятся); вход по ним через `nalogo` на нашей учётке не проверялся, `scripts/nalog_login.py` под такой вход не проверялся.
+
+### Решения оператора, нужные в начале сессии
+1. Напоминания: за сколько дней и сколько раз напоминать (например, одно напоминание или два); включать ли пробный период.
+2. Чеки: подтверждать ли каждый чек админом (решение 20.10.2026: да) и как доставлять чек пользователю (в `receipts` есть `receipt_url`, канала доставки в боте нет).
+3. Порядок: какая из двух задач первой.
+
+### Первая загрузка новой сессии (после стандартного блока из `session-start.md`)
+```bash
+cd /root/vpn-infra
+echo "=========== CHECKPOINT-BROADCAST"
+cat docs/checkpoint-2026-10-24-broadcast.md
+echo "=========== CHECKPOINT-PAYMENTS (разделы 19-22)"
+sed -n '/^## 19\./,$p' docs/checkpoint-2026-10-17-payments.md
+cd servers/panel/bot
+echo "=========== requirements.txt"
+cat requirements.txt
+echo "=========== app/payments.py"
+cat -n app/payments.py
+echo "=========== app/broadcast.py"
+cat -n app/broadcast.py
+echo "=========== app/subscription_service.py"
+cat -n app/subscription_service.py
+echo "=========== app/handlers/subscriptions.py"
+cat -n app/handlers/subscriptions.py
+echo "=========== app/timeutil.py"
+cat -n app/timeutil.py
+echo "=========== scripts/nalog_login.py"
+cat -n scripts/nalog_login.py
+echo "=========== migrations/0002_receipts.py"
+cat -n migrations/versions/0002_receipts.py
+echo "=========== ЖИВОЕ СОСТОЯНИЕ PANEL (только чтение, без секретов)"
+ssh -n root@31.77.78.144 '
+grep NALOG_STATE_DIR /opt/netru-bot/src/.env
+ls -la $(grep NALOG_STATE_DIR /opt/netru-bot/src/.env | cut -d= -f2) 2>&1
+/opt/netru-bot/venv/bin/pip show nalogo 2>&1 | grep -E "^(Name|Version)"
+sqlite3 -readonly -header /opt/netru-bot/bot.db "select status, count(*) as n from receipts group by status; select id, user_id, status, end_at from subscriptions order by end_at;"
+'
+```
+Если секция `## 19.` не найдётся, `sed` ничего не выведет: тогда `grep -n "^## " docs/checkpoint-2026-10-17-payments.md`.
