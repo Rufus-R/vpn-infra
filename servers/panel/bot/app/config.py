@@ -86,3 +86,6 @@ WEBHOOK_PORT = int(os.environ.get("WEBHOOK_PORT", "8711"))
 # работают как раньше. Каталог содержит token.json и device_id (создаются скриптом
 # scripts/nalog_login.py; права каталога 700, файлов 600; вне git).
 NALOG_STATE_DIR = os.environ.get("NALOG_STATE_DIR")
+# Выпуск чеков из бота (патч №3): выключен по умолчанию, включается после запуска боевого
+# магазина ЮKassa, чтобы тестовый платёж не стал настоящим доходом в «Мой налог».
+NALOG_ISSUE_ENABLED = os.environ.get("NALOG_ISSUE_ENABLED", "").strip().lower() in ("1", "true", "yes")

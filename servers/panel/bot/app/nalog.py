@@ -126,8 +126,8 @@ def _build_payload(service_name: str, amount_kopecks: int,
     return request.model_dump()
 
 
-async def issue_receipt(service_name: str, amount_kopecks: int,
-                        operation_time: dt.datetime) -> IssueResult:
+async def _issue_receipt(service_name: str, amount_kopecks: int,
+                         operation_time: dt.datetime) -> IssueResult:
     try:
         client = _get_client()
     except (OSError, RuntimeError) as exc:
@@ -170,7 +170,7 @@ async def issue_receipt(service_name: str, amount_kopecks: int,
     return IssueResult("sent", receipt_uuid=str(receipt_uuid), receipt_url=url)
 
 
-async def check_token() -> tuple[str, str | None]:
+async def _check_token() -> tuple[str, str | None]:
     """Вернуть (результат, подробность): ok / rejected (ФНС отказала, нужен новый вход) /
     unavailable (сеть или сбой ФНС: токен нерабочим не считается)."""
     try:
@@ -249,3 +249,19 @@ async def token_monitor_loop(bot: Bot) -> None:
         except Exception:
             logger.exception("проверка токена «Мой налог»: сбой цикла")
         await asyncio.sleep(_seconds_until_next_check(dt.datetime.now(_MSK)))
+
+
+_api_lock = asyncio.Lock()
+
+
+async def issue_receipt(service_name: str, amount_kopecks: int,
+                        operation_time: dt.datetime) -> IssueResult:
+    """Запросы к ФНС идут по одному: refresh-токен ротируется при каждом обновлении,
+    параллельное обновление из двух задач испортило бы сессию."""
+    async with _api_lock:
+        return await _issue_receipt(service_name, amount_kopecks, operation_time)
+
+
+async def check_token() -> tuple[str, str | None]:
+    async with _api_lock:
+        return await _check_token()

@@ -19,7 +19,7 @@ from sqlalchemy import func, select
 
 from app.config import ADMIN_IDS
 from app.db.base import async_session
-from app.db.models import Payment, Receipt, Subscription, SupportMessage, User
+from app.db.models import Payment, Subscription, SupportMessage, User
 from app.keyboards import admin_back_keyboard, admin_menu_keyboard
 from app.panel_api import PanelApiClient, PanelApiError
 
@@ -102,33 +102,6 @@ async def cb_admin_payments(callback: CallbackQuery) -> None:
             f"{p.provider} · {_when(p.created_at)}"
             for p in rows
         ]
-        text = "\n".join(lines)
-    await _show(callback, text, admin_back_keyboard())
-
-
-@router.callback_query(F.data == "adm:receipts")
-async def cb_admin_receipts(callback: CallbackQuery) -> None:
-    await callback.answer()
-    async with async_session() as session:
-        total = (await session.execute(
-            select(func.count(Receipt.id)).where(Receipt.status == "pending_review"))).scalar_one()
-        rows = (await session.execute(
-            select(Receipt, Payment).join(Payment, Receipt.payment_id == Payment.id)
-            .where(Receipt.status == "pending_review").order_by(Receipt.id).limit(20))).all()
-    if not total:
-        text = "🧾 Чеков к выдаче нет."
-    else:
-        lines = [
-            f"🧾 Чеков к выдаче: {total} (ждут ручной выдачи в «Мой налог»; время UTC)",
-            "",
-        ]
-        lines += [
-            f"чек #{r.id} · платёж #{p.id} · {_rub(r.amount)} · {r.service_name} · "
-            f"{_when(r.created_at)}"
-            for r, p in rows
-        ]
-        if total > len(rows):
-            lines.append(f"… и ещё {total - len(rows)}")
         text = "\n".join(lines)
     await _show(callback, text, admin_back_keyboard())
 

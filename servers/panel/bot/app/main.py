@@ -12,6 +12,7 @@ from app.db.seed import seed_defaults
 from app.handlers import router
 from app.nalog import close_client, token_monitor_loop
 from app.payments import payments_enabled, reconcile_loop
+from app.receipts import mark_interrupted as mark_receipts_interrupted
 from app.reminders import reminder_loop
 from app.webhook import start_webhook
 
@@ -43,6 +44,10 @@ dp.include_router(router)
 async def main() -> None:
     await init_db()  # применяет миграции Alembic (upgrade head)
     await seed_defaults()
+    try:
+        await mark_receipts_interrupted()
+    except Exception:
+        logger.exception("чеки: не удалось обработать прерванные выпуски")
     session = AiohttpSession(proxy=TG_PROXY_URL) if TG_PROXY_URL else AiohttpSession()
     bot = Bot(token=BOT_TOKEN, session=session)
     resume_task = asyncio.create_task(resume_broadcasts(bot))
