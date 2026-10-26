@@ -12,6 +12,7 @@ from app.db.seed import seed_defaults
 from app.handlers import router
 from app.nalog import close_client, token_monitor_loop
 from app.payments import payments_enabled, reconcile_loop
+from app.receipt_reminder import receipt_reminder_loop
 from app.receipts import mark_interrupted as mark_receipts_interrupted
 from app.reminders import reminder_loop
 from app.webhook import start_webhook
@@ -53,6 +54,7 @@ async def main() -> None:
     resume_task = asyncio.create_task(resume_broadcasts(bot))
     reminder_task = asyncio.create_task(reminder_loop(bot))
     nalog_task = asyncio.create_task(token_monitor_loop(bot))
+    receipt_reminder_task = asyncio.create_task(receipt_reminder_loop(bot))
 
     runner = None
     reconcile_task = None
@@ -67,6 +69,7 @@ async def main() -> None:
     finally:
         reminder_task.cancel()
         nalog_task.cancel()
+        receipt_reminder_task.cancel()
         if reconcile_task is not None:
             reconcile_task.cancel()
         if runner is not None:
