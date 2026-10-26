@@ -10,6 +10,7 @@ from app.config import BOT_TOKEN, PANEL_API_BASE, TG_PROXY_URL
 from app.db.base import init_db
 from app.db.seed import seed_defaults
 from app.handlers import router
+from app.nalog import close_client, token_monitor_loop
 from app.payments import payments_enabled, reconcile_loop
 from app.reminders import reminder_loop
 from app.webhook import start_webhook
@@ -46,6 +47,7 @@ async def main() -> None:
     bot = Bot(token=BOT_TOKEN, session=session)
     resume_task = asyncio.create_task(resume_broadcasts(bot))
     reminder_task = asyncio.create_task(reminder_loop(bot))
+    nalog_task = asyncio.create_task(token_monitor_loop(bot))
 
     runner = None
     reconcile_task = None
@@ -59,10 +61,12 @@ async def main() -> None:
         await dp.start_polling(bot)
     finally:
         reminder_task.cancel()
+        nalog_task.cancel()
         if reconcile_task is not None:
             reconcile_task.cancel()
         if runner is not None:
             await runner.cleanup()
+        await close_client()
 
 
 if __name__ == "__main__":
