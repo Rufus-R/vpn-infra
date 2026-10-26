@@ -1,18 +1,21 @@
-"""Одноразовый интерактивный вход в «Мой налог» по SMS.
+"""Одноразовый интерактивный вход в «Мой налог»: по ИНН и паролю (по умолчанию) или по SMS.
 
-См. docs/checkpoint-2026-10-17-payments.md, раздел 21.
+См. docs/checkpoint-2026-10-17-payments.md, разделы 21-22.
 
-Запуск на Panel интерпретатором из venv бота:
+Запуск на Panel интерпретатором из venv бота (нужен терминал, то есть ssh -t):
     /opt/netru-bot/venv/bin/python scripts/nalog_login.py /root/.secrets/nalog
+    /opt/netru-bot/venv/bin/python scripts/nalog_login.py /root/.secrets/nalog --method sms
 Каталог состояния можно задать и переменной окружения NALOG_STATE_DIR.
 
 В каталоге создаются (права каталога 700, файлов 600):
     device_id  - идентификатор устройства: создаётся один раз и дальше передаётся ботом;
     token.json - токены доступа (пишет библиотека nalogo).
 
-Номер телефона и код вводятся в диалоге и в аргументы командной строки не попадают.
-Код из SMS, токен вызова и токены доступа в вывод не попадают.
+ИНН, пароль, номер телефона и код вводятся в диалоге и в аргументы командной строки не
+попадают. Пароль, код из SMS, токен вызова и токены доступа в вывод не попадают.
+Делается ровно одна попытка входа без повторов.
 """
+import argparse
 import asyncio
 import getpass
 import json
@@ -26,7 +29,8 @@ from nalogo.auth import generate_device_id
 from nalogo.client import Client
 from nalogo.exceptions import DomainException, NetworkException, UnauthorizedException
 
-USAGE = "Использование: nalog_login.py <каталог состояния> (или переменная NALOG_STATE_DIR)"
+USAGE = ("Использование: nalog_login.py <каталог состояния> [--method password|sms] "
+         "(каталог можно задать переменной NALOG_STATE_DIR)")
 
 
 def _mask(value, keep=2):
@@ -45,6 +49,23 @@ def _normalize_phone(raw):
     if not re.fullmatch(r"7\d{10}", digits):
         raise ValueError("Ожидается номер из 11 цифр, например 79001234567")
     return digits
+
+
+def _normalize_inn(raw):
+    digits = re.sub(r"\D", "", raw)
+    if not re.fullmatch(r"\d{12}", digits):
+        raise ValueError("Ожидается ИНН из 12 цифр")
+    return digits
+
+
+def _read_credentials(method):
+    if method == "sms":
+        return {"phone": _normalize_phone(input("Номер телефона из «Мой налог» (11 цифр): "))}
+    inn = _normalize_inn(input("ИНН (12 цифр): "))
+    password = getpass.getpass("Пароль «Мой налог»: ")
+    if not password:
+        raise ValueError("Пароль не введён")
+    return {"inn": inn, "password": password}
 
 
 def _prepare_dir(path):
@@ -90,7 +111,7 @@ def _fail(stage, exc):
     return 1
 
 
-async def _login(state_dir):
+async def _login(state_dir, method):
     device_id = _read_or_create_device_id(state_dir)
     token_file = _prepare_token_file(state_dir)
 
@@ -101,23 +122,29 @@ async def _login(state_dir):
             return 0
 
     try:
-        phone = _normalize_phone(input("Номер телефона из «Мой налог» (11 цифр): "))
+        creds = _read_credentials(method)
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 1
 
     async with Client(storage_path=str(token_file), device_id=device_id) as client:
-        stage = "запрос кода"
+        stage = "вход"
         try:
-            challenge = await client.create_phone_challenge(phone)
-            challenge_token = challenge.get("challengeToken")
-            if not challenge_token:
-                print("Ответ на запрос кода без challengeToken.", file=sys.stderr)
-                return 1
-            print("Код отправлен по SMS.")
-            code = getpass.getpass("Код из SMS: ").strip()
-            stage = "подтверждение кода"
-            await client.create_new_access_token_by_phone(phone, challenge_token, code)
+            if method == "sms":
+                stage = "запрос кода"
+                challenge = await client.create_phone_challenge(creds["phone"])
+                challenge_token = challenge.get("challengeToken")
+                if not challenge_token:
+                    print("Ответ на запрос кода без challengeToken.", file=sys.stderr)
+                    return 1
+                print("Код отправлен по SMS.")
+                code = getpass.getpass("Код из SMS: ").strip()
+                stage = "подтверждение кода"
+                await client.create_new_access_token_by_phone(
+                    creds["phone"], challenge_token, code)
+            else:
+                stage = "вход по паролю"
+                await client.create_new_access_token(creds["inn"], creds["password"])
             stage = "проверка профиля"
             profile = await client.user().get()
         except UnauthorizedException as exc:
@@ -140,13 +167,20 @@ async def _login(state_dir):
 
 def main():
     os.umask(0o077)
-    arg = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("NALOG_STATE_DIR")
-    if not arg or arg.startswith("-"):
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("state_dir", nargs="?", default=os.environ.get("NALOG_STATE_DIR"))
+    parser.add_argument("--method", choices=("password", "sms"), default="password")
+    try:
+        args = parser.parse_args()
+    except SystemExit:
         print(USAGE, file=sys.stderr)
         return 2
-    state_dir = Path(arg)
+    if not args.state_dir:
+        print(USAGE, file=sys.stderr)
+        return 2
+    state_dir = Path(args.state_dir)
     _prepare_dir(state_dir)
-    return asyncio.run(_login(state_dir))
+    return asyncio.run(_login(state_dir, args.method))
 
 
 if __name__ == "__main__":
