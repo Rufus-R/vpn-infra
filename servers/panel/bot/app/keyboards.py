@@ -83,6 +83,7 @@ def admin_menu_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="🧾 Чеки к выдаче", callback_data="adm:receipts")],
         [InlineKeyboardButton(text="📩 Обращения", callback_data="adm:support")],
         [InlineKeyboardButton(text="🩺 Проверка Panel", callback_data="adm:panel")],
+        [InlineKeyboardButton(text="♾️ Безлимит", callback_data="adm:unl")],
         [InlineKeyboardButton(text="📣 Рассылка", callback_data="adm:bc:menu")],
         [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="menu:back")],
     ])

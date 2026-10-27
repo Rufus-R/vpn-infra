@@ -14,7 +14,7 @@ import time
 import httpx
 from aiogram import Router, F
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import CallbackQuery, InlineKeyboardMarkup
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import func, select
 
 from app.config import ADMIN_IDS
@@ -25,6 +25,11 @@ from app.panel_api import PanelApiClient, PanelApiError
 
 router = Router()
 router.callback_query.filter(F.from_user.id.in_(ADMIN_IDS))
+
+# Безлимит: техническая далёкая дата end_at, чтобы напоминания 3д/1д и рассылка
+# «истекает» не целились в бессрочных клиентов; Panel — источник истины для срока.
+_UNLIMITED_END_AT = dt.datetime(2036, 10, 26)
+_UNLIMITED_MARK_YEAR = 2030  # end_at >= этого года считаем «уже безлимит»
 
 
 def _rub(kopecks: int) -> str:
@@ -184,3 +189,80 @@ async def cb_admin_panel(callback: CallbackQuery) -> None:
     finally:
         await panel.close()
     await _show(callback, text, admin_back_keyboard())
+
+
+@router.callback_query(F.data == "adm:unl")
+async def cb_admin_unlimited(callback: CallbackQuery) -> None:
+    """♾️ Безлимит: список подписок с кнопкой выдачи бессрочного доступа."""
+    await callback.answer()
+    async with async_session() as session:
+        rows = (await session.execute(
+            select(Subscription, User).join(User, User.id == Subscription.user_id)
+            .order_by(Subscription.id))).all()
+    if not rows:
+        await _show(callback, "♾️ Безлимит: подписок пока нет.", admin_back_keyboard())
+        return
+
+    lines = ["♾️ Безлимит", "",
+             "Выберите пользователя — Panel получит expiryTime=0, в БД срок уедет на 2036,",
+             "ложные напоминания о продлении исчезнут.", ""]
+    buttons = []
+    for sub, user in rows:
+        unlimited = bool(sub.end_at) and sub.end_at.year >= _UNLIMITED_MARK_YEAR
+        mark = " · ♾️ уже" if unlimited else ""
+        lines.append(f"• user {user.id} · tg{user.tg_id} · {sub.status} · "
+                     f"до {_when(sub.end_at)}{mark}")
+        buttons.append([InlineKeyboardButton(
+            text=f"♾️ user {user.id} · tg{user.tg_id}",
+            callback_data=f"adm:unl:do:{user.id}")])
+    buttons.append([InlineKeyboardButton(text="⬅️ Админ-меню", callback_data="adm:menu")])
+    await _show(callback, "\n".join(lines),
+                InlineKeyboardMarkup(inline_keyboard=buttons))
+
+
+@router.callback_query(F.data.startswith("adm:unl:do:"))
+async def cb_admin_unlimited_grant(callback: CallbackQuery) -> None:
+    """Выдать безлимит: Panel expiryTime=0 (limitIp не трогаем) + БД end_at=2036."""
+    await callback.answer()
+    user_id = int(callback.data.rsplit(":", 1)[1])
+    async with async_session() as session:
+        sub = (await session.execute(
+            select(Subscription).where(Subscription.user_id == user_id))).scalar_one_or_none()
+        if sub is None:
+            await _show(callback,
+                        f"♾️ user {user_id}: подписки нет. Сначала пусть нажмёт "
+                        "«🎁 7 дней бесплатно» — тогда появится клиент и ссылка.",
+                        admin_back_keyboard())
+            return
+        email = sub.panel_client_email
+
+    panel = PanelApiClient()
+    try:
+        await panel.update_client_safe(email, expiryTime=0)
+        client = (await panel.get_client(email))["client"]
+    except (PanelApiError, httpx.HTTPError) as exc:
+        await _show(callback,
+                    f"♾️ user {user_id}: ошибка Panel ({type(exc).__name__}). "
+                    "Срок в БД не менял, повторите позже.",
+                    admin_back_keyboard())
+        return
+    finally:
+        await panel.close()
+
+    async with async_session() as session:
+        sub = (await session.execute(
+            select(Subscription).where(Subscription.user_id == user_id))).scalar_one()
+        old_end = sub.end_at
+        sub.end_at = _UNLIMITED_END_AT
+        sub.next_device_at = None
+        sub.next_device_count = None
+        await session.commit()
+
+    await _show(callback,
+                "♾️ Безлимит выдан\n\n"
+                f"user {user_id} · {email}\n"
+                f"Panel: expiryTime=0, limitIp={int(client.get('limitIp') or 0)}, "
+                f"enable={bool(client.get('enable'))}\n"
+                f"БД: {_when(old_end)} → {_when(_UNLIMITED_END_AT)}\n\n"
+                "Проверка: у пользователя «📱 Мои подписки» — «без ограничения по сроку».",
+                admin_back_keyboard())
