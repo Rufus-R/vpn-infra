@@ -71,6 +71,9 @@ async def cb_admin_stats(callback: CallbackQuery) -> None:
         trial_now = (await session.execute(
             select(func.count(Subscription.id)).where(
                 Subscription.status == "trial", Subscription.end_at > now))).scalar_one()
+        family_now = (await session.execute(
+            select(func.count(Subscription.id)).where(
+                Subscription.status == "family"))).scalar_one()
         sub_rows = (await session.execute(
             select(Subscription.status, func.count()).group_by(Subscription.status)
             .order_by(Subscription.status))).all()
@@ -82,7 +85,8 @@ async def cb_admin_stats(callback: CallbackQuery) -> None:
         "📊 Статистика",
         "",
         f"Пользователей: {users_total} (согласие на ПДн: {consented}, триал брали: {trials_used})",
-        f"Действующих сейчас: платных {paid_now}, триалов {trial_now}",
+        f"Действующих сейчас: платных {paid_now}, триалов {trial_now}, "
+        f"семейных {family_now}",
         "",
         "Подписки по статусам:",
     ]
@@ -193,25 +197,51 @@ async def cb_admin_panel(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data == "adm:unl")
 async def cb_admin_unlimited(callback: CallbackQuery) -> None:
-    """♾️ Безлимит: список подписок с кнопкой выдачи бессрочного доступа."""
+    """♾️ Безлимит (family): показывает клиентов Panel и статус подписки."""
     await callback.answer()
+    panel = PanelApiClient()
+    started = time.monotonic()
+    try:
+        data = await panel._call("GET", "/clients/list/paged",
+                                 params={"page": 1, "pageSize": 200})
+        obj = data.get("obj") or {}
+        clients = obj.get("clients") or []
+    except (PanelApiError, httpx.HTTPError) as exc:
+        clients = []
+        print(f"adm:unl: ошибка Panel ({type(exc).__name__})")
+    finally:
+        await panel.close()
+    elapsed_ms = int((time.monotonic() - started) * 1000)
+
+    by_email = {c.get("email"): c for c in clients if c.get("email")}
+
     async with async_session() as session:
         rows = (await session.execute(
-            select(Subscription, User).join(User, User.id == Subscription.user_id)
+            select(Subscription, User).join(User, Subscription.user_id == User.id)
             .order_by(Subscription.id))).all()
+
     if not rows:
         await _show(callback, "♾️ Безлимит: подписок пока нет.", admin_back_keyboard())
         return
 
-    lines = ["♾️ Безлимит", "",
-             "Выберите пользователя — Panel получит expiryTime=0, в БД срок уедет на 2036,",
-             "ложные напоминания о продлении исчезнут.", ""]
+    lines = [f"♾️ Безлимит · Panel ответил за {elapsed_ms} мс", "",
+             "Кандидаты помечены по данным Panel: exp=0 — клиент бессрочный.", ""]
     buttons = []
     for sub, user in rows:
-        unlimited = bool(sub.end_at) and sub.end_at.year >= _UNLIMITED_MARK_YEAR
-        mark = " · ♾️ уже" if unlimited else ""
+        pc = by_email.get(sub.panel_client_email) or {}
+        expiry = int(pc.get("expiryTime") or 0)
+        enable = bool(pc.get("enable"))
+        limit_ip = int(pc.get("limitIp") or 0)
+
+        if sub.status == "family":
+            mark = " · 👥 family"
+        elif expiry <= 0 and enable:
+            mark = " · ⏳ готов"
+        else:
+            mark = ""
+
         lines.append(f"• user {user.id} · tg{user.tg_id} · {sub.status} · "
-                     f"до {_when(sub.end_at)}{mark}")
+                     f"exp={expiry} lim={limit_ip} en={int(enable)}{mark}")
         buttons.append([InlineKeyboardButton(
             text=f"♾️ user {user.id} · tg{user.tg_id}",
             callback_data=f"adm:unl:do:{user.id}")])
@@ -220,9 +250,10 @@ async def cb_admin_unlimited(callback: CallbackQuery) -> None:
                 InlineKeyboardMarkup(inline_keyboard=buttons))
 
 
+
 @router.callback_query(F.data.startswith("adm:unl:do:"))
 async def cb_admin_unlimited_grant(callback: CallbackQuery) -> None:
-    """Выдать безлимит: Panel expiryTime=0 (limitIp не трогаем) + БД end_at=2036."""
+    """Выдать family: Panel expiryTime=0 + БД status='family' + end_at=2036."""
     await callback.answer()
     user_id = int(callback.data.rsplit(":", 1)[1])
     async with async_session() as session:
@@ -243,7 +274,7 @@ async def cb_admin_unlimited_grant(callback: CallbackQuery) -> None:
     except (PanelApiError, httpx.HTTPError) as exc:
         await _show(callback,
                     f"♾️ user {user_id}: ошибка Panel ({type(exc).__name__}). "
-                    "Срок в БД не менял, повторите позже.",
+                    "Статус не менял, повторите позже.",
                     admin_back_keyboard())
         return
     finally:
@@ -252,17 +283,19 @@ async def cb_admin_unlimited_grant(callback: CallbackQuery) -> None:
     async with async_session() as session:
         sub = (await session.execute(
             select(Subscription).where(Subscription.user_id == user_id))).scalar_one()
-        old_end = sub.end_at
+        old_status = sub.status
+        sub.status = "family"
         sub.end_at = _UNLIMITED_END_AT
         sub.next_device_at = None
         sub.next_device_count = None
         await session.commit()
 
     await _show(callback,
-                "♾️ Безлимит выдан\n\n"
+                "♾️ Family выдан\n\n"
                 f"user {user_id} · {email}\n"
                 f"Panel: expiryTime=0, limitIp={int(client.get('limitIp') or 0)}, "
                 f"enable={bool(client.get('enable'))}\n"
-                f"БД: {_when(old_end)} → {_when(_UNLIMITED_END_AT)}\n\n"
-                "Проверка: у пользователя «📱 Мои подписки» — «без ограничения по сроку».",
+                f"БД: status '{old_status}' → 'family', end_at {_when(_UNLIMITED_END_AT)}\n\n"
+                "Проверка: у пользователя «📱 Мои подписки» — «👥 Семейная», "
+                "«без ограничения по сроку».",
                 admin_back_keyboard())

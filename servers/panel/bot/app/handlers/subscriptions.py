@@ -64,7 +64,7 @@ async def cb_subs(callback: CallbackQuery) -> None:
             select(Subscription, Plan)
             .join(Plan, Subscription.plan_id == Plan.id)
             .where(Subscription.user_id == user.id)
-            .where(Subscription.status.in_(["trial", "active"]))
+            .where(Subscription.status.in_(["trial", "active", "family"]))
             .where(Subscription.end_at > dt.datetime.utcnow())
         )).first()
         linked = (await session.execute(
@@ -85,7 +85,8 @@ async def cb_subs(callback: CallbackQuery) -> None:
     try:
         if own is not None:
             subscription, plan = own
-            status_badge = "🎁 Пробная" if subscription.status == "trial" else "✅ Платная"
+            status_badge = {"trial": "🎁 Пробная", "family": "👥 Семейная"}.get(
+                subscription.status, "✅ Платная")
             sub_id = subscription.panel_client_sub_id
             devices_line = ""
             try:

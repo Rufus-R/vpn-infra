@@ -33,7 +33,7 @@ async def _has_active_subscription(user_id: int) -> bool:
         count = (await session.execute(
             select(func.count()).select_from(Subscription)
             .where(Subscription.user_id == user_id)
-            .where(Subscription.status.in_(("active", "trial")))
+            .where(Subscription.status.in_(("active", "trial", "family")))
             .where(Subscription.end_at > dt.datetime.utcnow())
         )).scalar_one()
     return count > 0
