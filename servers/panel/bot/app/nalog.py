@@ -123,7 +123,13 @@ def _build_payload(service_name: str, amount_kopecks: int,
         client=IncomeClient(),
         payment_type=PaymentType.ACCOUNT,
     )
-    return request.model_dump()
+    payload = request.model_dump()
+    # ФНС (проверено 27.10.2026 боем) принимает paymentType только CASH или WIRE,
+    # значение ACCOUNT даёт 400 ValidationException. В enum nalogo 1.2.0 значения
+    # WIRE нет (только CASH/ACCOUNT), поэтому после сериализации подменяем:
+    # оплата картой через ЮKassa — безналичный расчёт = WIRE.
+    payload["paymentType"] = "WIRE"
+    return payload
 
 
 async def _issue_receipt(service_name: str, amount_kopecks: int,
