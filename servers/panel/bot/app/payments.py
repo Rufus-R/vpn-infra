@@ -32,6 +32,7 @@ from app.config import (
 from app.db.base import async_session
 from app.db.models import Payment, Plan, Receipt, User
 from app.panel_api import PanelApiClient, PanelApiError
+from app.receipts import issue as issue_receipt, issuing_enabled as _receipts_enabled
 from app.subscription_service import (
     apply_due_downgrades, apply_period, compute_target_end, save_subscription, user_lock,
 )
@@ -330,9 +331,34 @@ async def _activate_in_lock(bot: Bot, payment_id: int) -> int | None:
     await _notify_admins(
         bot,
         f"✅ Платёж {payment_id} подтверждён: «{plan_name}», {amount_rub} ₽. "
-        "Чек: черновик создан (pending_review), выпуск пока вручную.",
+        + ("Чек: выпускается автоматически." if _receipts_enabled()
+           else "Чек: черновик создан (pending_review), выпуск вручную."),
     )
+    # Автовыдача чека (27.10.2026): сразу после активации платёжного алерта.
+    # issue() сам пропустит вызов, если флаг NALOG_ISSUE_ENABLED выключен или чека нет.
+    task = asyncio.create_task(_issue_receipt_task(bot, payment_id))
+    _receipt_tasks.add(task)
+    task.add_done_callback(_receipt_tasks.discard)
     return bonus_id
+
+
+# Сильные ссылки на задачи автовыдачи: event loop держит задачи слабо, без ссылки
+# задача может быть собрана GC во время сетевого ожидания.
+_receipt_tasks: set[asyncio.Task] = set()
+
+
+async def _issue_receipt_task(bot: Bot, payment_id: int) -> None:
+    """Автовыдача чека по платежу (27.10.2026); issue() сам пропустит вызов,
+    если NALOG_ISSUE_ENABLED выключен или чека у платежа нет. Ошибки изолированы."""
+    try:
+        async with async_session() as session:
+            receipt_id = (await session.execute(
+                select(Receipt.id).where(Receipt.payment_id == payment_id)
+            )).scalar_one_or_none()
+        if receipt_id is not None:
+            await issue_receipt(bot, receipt_id)
+    except Exception:
+        logger.exception("автовыдача чека по платежу %s: сбой", payment_id)
 
 
 async def reconcile_once(bot: Bot) -> None:
