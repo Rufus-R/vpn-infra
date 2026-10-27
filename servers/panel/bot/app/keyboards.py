@@ -65,7 +65,7 @@ def subscriptions_keyboard(links: list[tuple[str, str]]) -> InlineKeyboardMarkup
     rows = [[InlineKeyboardButton(text=f"🔗 Открыть: {name}", url=url)] for name, url in links]
     if links:
         rows.append([InlineKeyboardButton(text="📲 Скачать Happ: iOS · Android · ПК",
-                                          url="https://hap.pf/go/7947")])
+                                          url="https://happ.info/")])
     rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:back")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

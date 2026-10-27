@@ -324,7 +324,7 @@ async def _activate_in_lock(bot: Bot, payment_id: int) -> int | None:
                 "Откройте ссылку в браузере и добавьте профиль в приложение Happ.\n\n"
                 "📲 Скачать Happ: [iOS (App Store)](https://apps.apple.com/us/app/happ-proxy-utility/id6504287215) · "
                 "[Android (Google Play)](https://play.google.com/store/apps/details?id=com.happproxy) · "
-                "[ПК (happ.su)](https://www.happ.su/)")
+                "[ПК (happ.info)](https://happ.info/)")
     else:
         text = (f"{head} до {fmt_msk(target)} (МСК), но ссылку сформировать "
                 "автоматически не удалось. Обратитесь в поддержку.")
