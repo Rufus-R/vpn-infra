@@ -197,41 +197,51 @@ async def cb_admin_panel(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data == "adm:unl")
 async def cb_admin_unlimited(callback: CallbackQuery) -> None:
-    """♾️ Безлимит (family): показывает клиентов Panel и статус подписки."""
+    """♾️ Безлимит (family): проверяет клиентов Panel через get_client."""
     await callback.answer()
     panel = PanelApiClient()
     started = time.monotonic()
+    errors = []
+    # Индекс: email → данные клиента
+    by_email: dict[str, dict] = {}
     try:
-        data = await panel._call("GET", "/clients/list/paged",
-                                 params={"page": 1, "pageSize": 200})
-        obj = data.get("obj") or {}
-        clients = obj.get("clients") or []
-    except (PanelApiError, httpx.HTTPError) as exc:
-        clients = []
-        print(f"adm:unl: ошибка Panel ({type(exc).__name__})")
+        async with async_session() as session:
+            rows = (await session.execute(
+                select(Subscription, User).join(User, Subscription.user_id == User.id)
+                .order_by(Subscription.id))).all()
+        for sub, user in rows:
+            email = sub.panel_client_email
+            try:
+                c = (await panel.get_client(email))["client"]
+                by_email[email] = c
+            except Exception as exc:
+                errors.append(f"{email}: {type(exc).__name__}")
+    except Exception as exc:
+        errors.append(f"БД: {type(exc).__name__}")
     finally:
         await panel.close()
     elapsed_ms = int((time.monotonic() - started) * 1000)
-
-    by_email = {c.get("email"): c for c in clients if c.get("email")}
-
-    async with async_session() as session:
-        rows = (await session.execute(
-            select(Subscription, User).join(User, Subscription.user_id == User.id)
-            .order_by(Subscription.id))).all()
 
     if not rows:
         await _show(callback, "♾️ Безлимит: подписок пока нет.", admin_back_keyboard())
         return
 
     lines = [f"♾️ Безлимит · Panel ответил за {elapsed_ms} мс", "",
-             "Кандидаты помечены по данным Panel: exp=0 — клиент бессрочный.", ""]
+             "Клиенты Panel: exp=0 — бессрочный, lim — кол-во устройств, en — включён.", ""]
+    if errors:
+        lines += ["", "Ошибки чтения:", ""] + [f"  ✗ {e}" for e in errors]
     buttons = []
     for sub, user in rows:
-        pc = by_email.get(sub.panel_client_email) or {}
-        expiry = int(pc.get("expiryTime") or 0)
-        enable = bool(pc.get("enable"))
-        limit_ip = int(pc.get("limitIp") or 0)
+        pc = by_email.get(sub.panel_client_email)
+        if pc is not None:
+            expiry = int(pc.get("expiryTime") or 0)
+            enable = bool(pc.get("enable"))
+            limit_ip = int(pc.get("limitIp") or 0)
+            comment = pc.get("comment", "")
+        else:
+            expiry = limit_ip = 0
+            enable = False
+            comment = "(не удалось прочитать)"
 
         if sub.status == "family":
             mark = " · 👥 family"
@@ -240,8 +250,10 @@ async def cb_admin_unlimited(callback: CallbackQuery) -> None:
         else:
             mark = ""
 
-        lines.append(f"• user {user.id} · tg{user.tg_id} · {sub.status} · "
-                     f"exp={expiry} lim={limit_ip} en={int(enable)}{mark}")
+        line = f"• user {user.id} · tg{user.tg_id} · {sub.status} · "                f"exp={expiry} lim={limit_ip} en={int(enable)}{mark}"
+        if comment:
+            line += f" | {comment}"
+        lines.append(line)
         buttons.append([InlineKeyboardButton(
             text=f"♾️ user {user.id} · tg{user.tg_id}",
             callback_data=f"adm:unl:do:{user.id}")])
