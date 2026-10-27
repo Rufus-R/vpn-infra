@@ -38,7 +38,10 @@ async def cb_trial_start(callback: CallbackQuery) -> None:
         return
 
     if gate_user.trial_used:
-        await callback.message.answer("Пробный период уже был использован на этом аккаунте.")
+        await callback.message.answer(
+            "Пробный период уже был использован на этом аккаунте.\n\n"
+            "Для доступа к сервису оформите подписку в разделе «Тарифы».\n\n"
+            "📲 Приложение Happ: iOS — App Store, Android — Google Play, ПК — happ.su")
         return
 
     if REALITY_INBOUND_ID is None:
@@ -95,8 +98,8 @@ async def cb_trial_start(callback: CallbackQuery) -> None:
     if sub_url:
         text = (f"Пробный период активирован, действует до {fmt_msk(target)} (МСК).\n\n"
                 f"Ссылка на подписку:\n{sub_url}\n\n"
-                "Откройте ссылку в браузере — на странице будет кнопка добавления "
-                "профиля в приложение Happ (бесплатное: App Store, Google Play, happ.su).")
+                "Откройте ссылку в браузере и добавьте профиль в приложение Happ.\n\n"
+                "📲 Скачать Happ: iOS — App Store, Android — Google Play, ПК — happ.su")
     else:
         text = (
             "Пробный период активирован, но не удалось сформировать ссылку "

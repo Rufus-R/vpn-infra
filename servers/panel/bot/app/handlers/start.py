@@ -9,10 +9,10 @@ import datetime as dt
 from aiogram import Router, F
 from aiogram.filters import CommandStart, CommandObject
 from aiogram.types import Message, CallbackQuery
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.db.base import async_session
-from app.db.models import User
+from app.db.models import Subscription, User
 from app.config import ADMIN_IDS
 from app.keyboards import main_menu, consent_keyboard
 
@@ -25,6 +25,16 @@ CONSENT_TEXT = (
     "username в целях предоставления доступа к сервису."
 )
 
+
+async def _has_active_subscription(user_id: int) -> bool:
+    async with async_session() as session:
+        count = (await session.execute(
+            select(func.count()).select_from(Subscription)
+            .where(Subscription.user_id == user_id)
+            .where(Subscription.status.in_(("active", "trial")))
+            .where(Subscription.end_at > dt.datetime.utcnow())
+        )).scalar_one()
+    return count > 0
 
 async def get_or_create_user(tg_id: int, username: str | None,
                               referrer_ref: str | None = None) -> User:
@@ -77,7 +87,10 @@ async def cmd_start(message: Message, command: CommandObject) -> None:
         await message.answer(CONSENT_TEXT, reply_markup=consent_keyboard())
         return
     await message.answer("С возвращением! Выберите действие:",
-                         reply_markup=main_menu(is_admin=message.from_user.id in ADMIN_IDS))
+                         reply_markup=main_menu(
+                             is_admin=message.from_user.id in ADMIN_IDS,
+                             trial_used=user.trial_used,
+                             has_subscription=await _has_active_subscription(user.id)))
 
 
 @router.callback_query(F.data == "consent:accept")
@@ -93,7 +106,10 @@ async def cb_consent_accept(callback: CallbackQuery) -> None:
         user.privacy_accepted_at = dt.datetime.utcnow()
         await session.commit()
     await callback.message.answer("Спасибо! Выберите действие:",
-                                  reply_markup=main_menu(is_admin=callback.from_user.id in ADMIN_IDS))
+                                  reply_markup=main_menu(
+                                      is_admin=callback.from_user.id in ADMIN_IDS,
+                                      trial_used=user.trial_used,
+                                      has_subscription=await _has_active_subscription(user.id)))
 
 
 @router.callback_query(F.data == "menu:back")
@@ -104,7 +120,10 @@ async def cb_back(callback: CallbackQuery) -> None:
         await callback.message.answer(CONSENT_TEXT, reply_markup=consent_keyboard())
         return
     await callback.message.answer("Выберите действие:",
-                                  reply_markup=main_menu(is_admin=callback.from_user.id in ADMIN_IDS))
+                                  reply_markup=main_menu(
+                                      is_admin=callback.from_user.id in ADMIN_IDS,
+                                      trial_used=user.trial_used,
+                                      has_subscription=await _has_active_subscription(user.id)))
 
 
 @router.callback_query(F.data == "menu:ref")

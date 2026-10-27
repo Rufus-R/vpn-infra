@@ -321,8 +321,10 @@ async def _activate_in_lock(bot: Bot, payment_id: int) -> int | None:
     head = "Оплата получена, подписка активна" if created else "Оплата получена, подписка продлена"
     if sub_url:
         text = (f"{head} до {fmt_msk(target)} (МСК).\n\nСсылка на подписку:\n{sub_url}\n\n"
-                "Откройте ссылку в браузере — на странице будет кнопка добавления "
-                "профиля в приложение Happ (бесплатное: App Store, Google Play, happ.su).")
+                "Откройте ссылку в браузере и добавьте профиль в приложение Happ.\n\n"
+                "📲 Скачать Happ: [iOS (App Store)](https://apps.apple.com/us/app/happ-proxy-utility/id6504287215) · "
+                "[Android (Google Play)](https://play.google.com/store/apps/details?id=com.happproxy) · "
+                "[ПК (happ.su)](https://www.happ.su/)")
     else:
         text = (f"{head} до {fmt_msk(target)} (МСК), но ссылку сформировать "
                 "автоматически не удалось. Обратитесь в поддержку.")

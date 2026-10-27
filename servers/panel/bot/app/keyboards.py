@@ -13,9 +13,13 @@ def consent_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
-def main_menu(is_admin: bool = False) -> InlineKeyboardMarkup:
+def main_menu(is_admin: bool = False, trial_used: bool = False,
+              has_subscription: bool = False) -> InlineKeyboardMarkup:
+    trial_label = ("✅ Подписка активна" if has_subscription
+                   else "⏳ Триал уже использован" if trial_used
+                   else "🎁 Попробовать бесплатно")
     rows = [
-        [InlineKeyboardButton(text="🎁 Попробовать бесплатно", callback_data="menu:trial")],
+        [InlineKeyboardButton(text=trial_label, callback_data="menu:trial")],
         [InlineKeyboardButton(text="💳 Тарифы", callback_data="menu:tariffs")],
         [InlineKeyboardButton(text="📱 Мои подписки", callback_data="menu:subs")],
         [InlineKeyboardButton(text="👥 Реферальная ссылка", callback_data="menu:ref")],
@@ -59,6 +63,9 @@ def subscriptions_keyboard(links: list[tuple[str, str]]) -> InlineKeyboardMarkup
     """Раздел «Мои подписки» — URL-кнопка на каждую активную подписку (если удалось
     получить subId), плюс «Назад» в любом случае."""
     rows = [[InlineKeyboardButton(text=f"🔗 Открыть: {name}", url=url)] for name, url in links]
+    if links:
+        rows.append([InlineKeyboardButton(text="📲 Скачать Happ: iOS · Android · ПК",
+                                          url="https://hap.pf/go/7947")])
     rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:back")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
