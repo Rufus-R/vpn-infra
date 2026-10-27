@@ -10,8 +10,9 @@ expiryTime и перевёл enable в False). Поэтому:
 
 Дополнение 08.10.2026 (найдено при round-trip get -> update):
   - поле `id` в ответе get — число; update не принимает это поле вовсе -> удаляется
-  - поле `allowedIPs` (WireGuard-specific) в ответе get — иногда пустая строка "",
-    а update ожидает []string -> конвертируется
+  - поле `allowedIPs` (WireGuard-specific) в ответе get — строка ("" у обычных клиентов,
+    непустая вида '10.8.1.2/32' у клиентов, привязанных к WG-инбаунду; в БД Panel при этом
+    хранится массив — строкит сам ответ GET), а update ожидает []string -> конвертируется
   См. bot.md, пункт 5a.
 """
 from __future__ import annotations
@@ -23,18 +24,24 @@ class PanelApiError(RuntimeError):
     pass
 
 
-# Поля, которые GET отдаёт как "" (пустую строку), а update ожидает как []
-_EMPTY_STR_TO_LIST_FIELDS = ("allowedIPs",)
+# Поля, которые GET отдаёт строкой, а update ожидает списком ([]string)
+_STRING_TO_LIST_FIELDS = ("allowedIPs",)
 
 
 def _normalize_for_update(client: dict) -> dict:
     """Приводит объект client из GET к виду, который принимает update/{email}.
-    См. docs/commercial/bot.md, пункт 5a (находки 08.10.2026)."""
+    См. docs/commercial/bot.md, пункт 5a (находки 08.10.2026 и 27.10.2026)."""
     client = dict(client)  # не мутировать объект вызывающего кода
     client.pop("id", None)
-    for field in _EMPTY_STR_TO_LIST_FIELDS:
-        if client.get(field) == "":
+    for field in _STRING_TO_LIST_FIELDS:
+        value = client.get(field)
+        if value == "":
             client[field] = []
+        elif isinstance(value, str):
+            # GET склеивает список в строку (у клиента, привязанного к WireGuard-инбаунду:
+            # '10.8.1.2/32' вместо ['10.8.1.2/32']) — разворачиваем обратно,
+            # иначе update падает: cannot unmarshal string into Go struct .allowedIPs []string
+            client[field] = [part.strip() for part in value.split(",") if part.strip()]
     return client
 
 
