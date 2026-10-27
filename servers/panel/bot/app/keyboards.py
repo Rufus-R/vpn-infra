@@ -5,9 +5,13 @@ def consent_keyboard() -> InlineKeyboardMarkup:
     """Экран согласия на обработку ПДн — показывается до главного меню,
     см. app/handlers/start.py, require_consent()."""
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ Я согласен", callback_data="consent:accept")],
+        [InlineKeyboardButton(text="🔒 Согласен на обработку ПДн", callback_data="consent:accept")],
         [InlineKeyboardButton(
-            text="📄 Политика конфиденциальности",
+            text="📄 Публичная оферта",
+            url="https://netru.ru.net/oferta",
+        )],
+        [InlineKeyboardButton(
+            text="🔒 Политика обработки ПДн",
             url="https://netru.ru.net/privacy",
         )],
     ])
@@ -23,6 +27,7 @@ def main_menu(is_admin: bool = False, trial_used: bool = False,
         [InlineKeyboardButton(text="💳 Тарифы", callback_data="menu:tariffs")],
         [InlineKeyboardButton(text="📱 Мои подписки", callback_data="menu:subs")],
         [InlineKeyboardButton(text="👥 Реферальная ссылка", callback_data="menu:ref")],
+        [InlineKeyboardButton(text="📚 Документы и согласие", callback_data="menu:docs")],
         [InlineKeyboardButton(text="📞 Поддержка", callback_data="menu:support")],
     ]
     if is_admin:
