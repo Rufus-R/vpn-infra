@@ -94,7 +94,9 @@ async def cb_trial_start(callback: CallbackQuery) -> None:
 
     if sub_url:
         text = (f"Пробный период активирован, действует до {fmt_msk(target)} (МСК).\n\n"
-                f"Ссылка на подписку:\n{sub_url}")
+                f"Ссылка на подписку:\n{sub_url}\n\n"
+                "Откройте ссылку в браузере — на странице будет кнопка добавления "
+                "профиля в приложение Happ (бесплатное: App Store, Google Play, happ.su).")
     else:
         text = (
             "Пробный период активирован, но не удалось сформировать ссылку "
