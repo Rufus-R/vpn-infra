@@ -217,11 +217,11 @@ systemctl is-active x-ui nginx netru-bot certbot.timer
 
 | Сайт | Ожидаемый результат |
 |------|---------------------|
-| `https://2ip.io/ru/` | IP `77.105.161.151` (S2) |
+| `https://2ip.io/ru/` | IP `195.242.118.2` (S3, exit с 29.10.2026; до инцидента был S2 `77.105.161.151`) |
 | `https://yandex.ru/internet`, `https://yandex.com/internet` | IP `31.77.169.67` (S_RU, direct по geo-split) |
 | YouTube, банки, Госуслуги | открываются |
 
-Путь: клиент → S_RU:443 → (RU direct | S2:10001 → интернет). Если RU-сайты показывают IP S2 — проверить routing S_RU (раздел «Версия Xray и geo-split» выше).
+Путь: клиент → S_RU:443 → (RU direct | S3:10001 → интернет; S2 — hot-standby). Если RU-сайты показывают IP S2/S3 — проверить routing S_RU (раздел «Версия Xray и geo-split» выше).
 
 Резервный вход AmneziaWG (S_RU:443/udp, зафиксирован 20.10.2026): ожидаемые результаты те же. Проверено оператором 20.10.2026 через приложение AmneziaWG: 2ip.io — `77.105.161.151`, yandex.ru/internet — `31.77.169.67`. Ссылку подписки приложение не принимает, нужна конфигурация. Состояние (только чтение): на S_RU `ss -lunp | grep -E ':443\b'` — ожидается `x-ui` на 443/udp, `ufw status numbered | grep 443` — правила 443/udp (v4 и v6); на Panel `sqlite3 -header /etc/x-ui/x-ui.db 'SELECT id,remark,port,protocol,node_id,exclude_from_sub FROM inbounds;'` — инбаунд `AmneziaWG` (id 7, `amneziawg`, 443, `node_id` как у `reality-entry`).
 

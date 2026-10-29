@@ -1,0 +1,60 @@
+{
+  "log": { "access": "none", "dnsLog": false, "error": "", "loglevel": "none", "maskAddress": "full" },
+  "inbounds": [
+    {
+      "listen": "0.0.0.0",
+      "port": 10001,
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          { "email": "relay-s3", "id": "UUID_PLACEHOLDER" }
+        ],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "tls",
+        "tcpSettings": {
+          "acceptProxyProtocol": false,
+          "header": { "type": "none" }
+        },
+        "tlsSettings": {
+          "alpn": ["h2", "http/1.1"],
+          "certificates": [
+            {
+              "buildChain": false,
+              "certificateFile": "/etc/xray/certs/server.crt",
+              "keyFile": "/etc/xray/certs/server.key",
+              "ocspStapling": 0,
+              "oneTimeLoading": false,
+              "usage": "encipherment"
+            }
+          ],
+          "cipherSuites": "",
+          "disableSystemRoot": false,
+          "echServerKeys": "",
+          "enableSessionResumption": false,
+          "maxVersion": "1.3",
+          "minVersion": "1.2",
+          "rejectUnknownSni": false,
+          "serverName": ""
+        }
+      },
+      "tag": "in-10001-tcp",
+      "sniffing": { "enabled": false }
+    }
+  ],
+  "outbounds": [
+    { "tag": "direct", "protocol": "freedom" },
+    { "tag": "blocked", "protocol": "blackhole" }
+  ],
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": [
+      { "inboundTag": ["api"], "outboundTag": "api", "type": "field" },
+      { "ip": ["geoip:private"], "outboundTag": "blocked", "type": "field" },
+      { "outboundTag": "blocked", "protocol": ["bittorrent"], "type": "field" },
+      { "inboundTag": ["in-10001-tcp"], "outboundTag": "direct", "type": "field" }
+    ]
+  }
+}
