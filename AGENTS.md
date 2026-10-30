@@ -77,3 +77,28 @@ diagnostic-commands, checkpoints по датам), `docs/home/` (домашни�
   loopback S3. Детали: `checkpoint-2026-10-29-tunnel-s3-probes.md`, `next-session-todo.md` §7.
 - Парольный SSH на S3 отключён (подтверждено `sshd -T`); OpenVPN S1↔S2 не тронут —
   домашний контур работает.
+
+## Сессия 30.10.2026 — нода мастер-панели на S3 (3x-ui v3.11.0)
+
+- **Pivot:** DPI стабильно режет Reality-хендшейк на S_RU:443 (все 8 uTLS-фингерпринтов) →
+  клиенты ходят **напрямую на S3**; подписки по-прежнему раздаёт мастер (`netru.ru.net:2096`).
+- **Решение:** на S3 поднята **нода** 3x-ui v3.11.0 (Xray 26.10.21) — не полная панель.
+  Мастер опрашивает API нод (push-модель). Панель ноды: `https://195.242.118.2:25307/…`,
+  self-signed 10 лет, пин `76145d04…6eef0` (серт релея переиспользован — клиенты и S_RU
+  не меняются). `xray-relay` остановлен/disabled, порты 10001/38417 теперь у x-ui.
+- **Клиенты в форке 3.11 хранятся в ТРЁХ местах консистентно** — таблица `clients`
+  (`tg_id` INTEGER!), `client_inbounds`, и полные объекты в `inbounds.settings.clients`
+  (эталон полей — в чекпоинте). Неполные данные → генератор молча даёт `clients: []`.
+  Не повторять: минимальный JSON `{email,id}`, инжект в `bin/config.json`.
+- `xrayTemplateConfig` без `outbounds` (`{}`) ломает маршрутизацию
+  (`default outbound handler not exist`). Минимум:
+  `{"log":{"loglevel":"info"},"outbounds":[{"protocol":"freedom","tag":"direct"}]}`.
+- UUID `7efdd1f8-…` (`relay-s3`) обязателен в инбаунде ноды — без него рвётся туннельный путь.
+- **Регистрация в мастере:** дефолтный `tlsVerifyMode=verify` даёт
+  `x509: certificate signed by unknown authority` → нужно **`pin`** (кнопка Fetch).
+  API-токен для формы — `/root/show-node-token.sh` на S3 (имя `Panel`).
+- После регистрации мастер **усыновляет** инбаунды ноды и пушит конфиг → привязка клиентов
+  к exit-ветке делается **в мастере**, не в БД ноды.
+- E2E: public S1→S3 ✅ 200, tunnel S_RU→S3 ✅ 200, tg-proxy ✅, бот Panel без ошибок.
+  Детали: `checkpoint-2026-10-30-s3-node-master-panel.md`, `next-session-todo.md` §8.
+

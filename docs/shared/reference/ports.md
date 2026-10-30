@@ -73,30 +73,36 @@ Firewall: `ufw`, default deny.
 
 ---
 
-## S3 (195.242.118.2) — relay/exit коммерческого проекта (введён 29.10.2026)
+## S3 (195.242.118.2) — exit-нода + нода мастер-панели (29.10.2026, нода с 30.10.2026)
 
-Чистый Xray (без 3x-ui), systemd-юнит `xray-relay`, конфиг `/etc/xray/config.json`
-(шаблон в репо: `servers/s3/relay-node/xray-config-template.json`). Firewall: `ufw`, default deny.
-Bootstrap: `servers/s3/bootstrap-s3.sh` (ключи оператора, ufw, IP-серт, Xray v26.10.21).
+С 30.10.2026 порты 10001/38417 обслуживает **x-ui** (нода 3x-ui v3.11.0, Xray 26.10.21),
+а не отдельный `xray-relay` (юнит остановлен и disabled; конфиг сохранён как бэкап).
+Панель управления нодой — на 25307, база `/etc/x-ui/x-ui.db`, серт `/etc/x-ui/certs/`.
+Firewall: `ufw`, default deny. Детали и грабли схемы БД:
+`docs/checkpoint-2026-10-30-s3-node-master-panel.md`.
 
 | Порт | Протокол | Процесс | Доступ | Назначение |
 |------|----------|---------|--------|-----------|
-| 22 | TCP | sshd | Все | SSH (пароль отключить после стабилизации — ключи оператора установлены) |
+| 22 | TCP | sshd | Все | SSH (парольный отключён — подтверждено `sshd -T`) |
 | 80 | TCP | — | Все | ACME HTTP-01 (резерв; серт IP self-signed 10 лет) |
-| 10001 | TCP | xray | `31.77.169.67` (S_RU), `194.55.236.229` (S1) | Relay-канал от S_RU (VLESS+TLS, IP-серт, `in-10001-tcp`) |
-| 25307 | TCP | — | `194.55.236.229`, `31.77.78.144`, `46.32.82.242`, `10.8.0.0/24` | Зарезервирован под будущую 3x-ui/управление (правила есть, сервиса нет) |
-| 38417 | TCP | xray (socks5, `in-38417-socks`, `tg-proxy`) | `31.77.78.144` (Panel) | ✅ **Прокси Telegram-бота с 30.10.2026** (перенос с S2 из-за блокировки). Аутентификация по логину/паролю, `udp:false`; правило ufw `tg-proxy from Panel` |
+| 10001 | TCP | x-ui (xray) | **`Anywhere`** (pivot 30.10) + S_RU, S1, `10.11.0.0/24` | Exit для клиентов **напрямую** (VLESS+TLS, 10 клиентов, `in-10001-tcp`); также relay-канал от S_RU и путь через туннель |
+| 25307 | TCP | x-ui | `194.55.236.229`, `31.77.78.144`, `46.32.82.242`, `10.8.0.0/24` | ✅ **Панель ноды 3x-ui v3.11.0** (HTTPS self-signed, basePath скрыт). Регистрация в мастере — `tlsVerifyMode=pin` |
+| 38417 | TCP | x-ui (xray socks5, `in-38417-socks`, `tg-proxy`) | `31.77.78.144` (Panel) | ✅ **Прокси Telegram-бота с 30.10.2026** (перенос с S2 из-за блокировки). Аутентификация по логину/паролю, `udp:false`; правило ufw `tg-proxy from Panel` |
 
-⚠️ **История узла S3 (30.10.2026):** socks5-inbound добавлен в `/etc/xray/config.json`
-(`in-38417-socks`, те же порт и назначение, что были у S2). В Xray `socks` inbound с
+⚠️ **История узла S3 (30.10.2026):** socks5-inbound впервые добавлен в `/etc/xray/config.json`
+(`in-38417-socks`, те же порт и назначение, что были у S2); затем при переводе S3 на ноду
+инбаунд перенесён в БД x-ui (id 4). В Xray `socks` inbound с
 аутентификацией `password` требует `accounts` вида `{"user": …, "pass": …}` (не `username`/`password`
 как в 3x-ui-форме). `settings.ip` = `127.0.0.1` — адрес bind для исходящих соединений прокси,
 `listen` отдельно = `0.0.0.0`. Правило маршрутизации `in-38417-socks → direct` стоит перед
 правилом `in-10001-tcp`. Бэкап конфига: `/root/xray-config.json.bak-20261030-pre-tgproxy`.
 
 Outbound на S_RU: `to-s3-relay` (первый/default в шаблоне, uuid `7efdd1f8-16a8-4769-8507-a63373642366`,
-`pinnedPeerCertSha256` = sha256 серта `/etc/xray/certs/server.crt` на S3). При перевыпуске
-серта на S3 — обновить pin на S_RU.
+адрес `10.11.0.2:10001` — через OpenVPN-туннель), `pinnedPeerCertSha256` =
+sha256 серта `/etc/x-ui/certs/server.crt` на S3
+(`76145d045ba251990c8f17dd2b43b087ce124f2db378464bfc2e648c5dd6eef0`).
+Тот же uuid обязателен в инбаунде ноды (`relay-s3`); при перевыпуске серта на S3 — обновить
+pin и на S_RU, и в клиентских конфигах.
 
 ---
 
