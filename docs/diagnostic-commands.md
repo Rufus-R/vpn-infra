@@ -160,6 +160,71 @@ x-ui settings
 
 ---
 
+## S3 (195.242.118.2) — relay/exit + socks5 `tg-proxy`
+
+### Сервисы и порты
+
+```bash
+systemctl is-active xray-relay openvpn-server@home-backup
+ss -tlnp | grep -E ':(10001|38417)\s'
+```
+
+**Ожидается:** оба юнита `active`; `*:10001` (relay, VLESS+TLS) и `*:38417`
+(socks5 `tg-proxy` для бота Panel).
+
+### Фаервол
+
+```bash
+ufw status | grep -E '10001|38417|8443'
+```
+
+**Ожидается:** `10001` — только `31.77.169.67` и `194.55.236.229`; `38417` —
+только `31.77.78.144`; `8443` — только `194.55.236.229`.
+
+### Прокси Telegram-бота (главный индикатор живучести бота)
+
+```bash
+# локально на S3, с учётными данными из /run/tgproxy_creds
+read -r U P < /run/tgproxy_creds
+curl -s --socks5-hostname "$U:$P@127.0.0.1:38417" -o /dev/null \
+     -w 'tg=%{http_code}\n' https://api.telegram.org/
+```
+
+**Ожидается:** `302` (корень Telegram API). `000` — прокси не работает.
+
+С Panel (боевая проверка):
+
+```bash
+curl -s --socks5-hostname <user>:<pass>@195.242.118.2:38417 \
+     "https://api.telegram.org/bot<TOKEN>/getMe" | head -c 120
+```
+
+**Ожидается:** `{"ok":true,...}`. Проверка без верных учётных данных должна
+давать `000` — так подтверждается, что аутентификация socks5 включена.
+
+### Конфиг и сертификат
+
+```bash
+/usr/local/xray/xray run -test -c /etc/xray/config.json
+openssl x509 -in /etc/xray/certs/server.crt -noout -enddate -fingerprint -sha256
+```
+
+**Ожидается:** `Configuration OK`; self-signed до 2036. При перевыпуске
+сертификата обновить `pinnedPeerCertSha256` в outbound `to-s3-relay` на S_RU.
+
+### OpenVPN `home-backup` (известная проблема, §«Известные отклонения»)
+
+```bash
+tail -5 /var/log/openvpn/status-home.log
+grep -c 'Bad encapsulated packet length' /var/log/openvpn/*.log 2>/dev/null
+```
+
+**Ожидается:** `active`, в `status-home.log` есть `ROUTING_TABLE,…,s1,…`.
+Трафик через туннель **не идёт** — открытая задача, см.
+`docs/checkpoint-2026-10-29-tunnel-s3-probes.md`.
+
+---
+
 ## Panel (31.77.78.144, netru.ru.net) — master-панель 3x-ui
 
 ### Сервисы
@@ -205,9 +270,38 @@ certbot certificates
 
 ```bash
 systemctl is-active x-ui nginx netru-bot certbot.timer
+systemctl show -p NRestarts --value netru-bot
 ```
 
-**Ожидается:** все четыре `active`.
+**Ожидается:** все четыре `active`, `NRestarts=0`.
+
+### Telegram-бот: поллинг через socks5 на S3
+
+```bash
+journalctl -u netru-bot --since -10min --no-pager | grep -c 'Failed to fetch updates'
+journalctl -u netru-bot --since -24h --no-pager | grep 'Update id=' | tail -1
+grep -E '^TG_PROXY_URL' /opt/netru-bot/src/.env | sed -E 's|//[^@]*@|//***@|'
+```
+
+**Ожидается:** ошибок `0` (единичные допустимы); последний обработанный апдейт
+не старше суток; `TG_PROXY_URL` указывает на **S3** (`195.242.118.2:38417`).
+
+⚠️ Признак инцидента 29–30.10.2026: счётчик ошибок растёт монотонно (~56/час),
+в сообщении `retry in … tryings = N` и `Request timeout error`, апдейты не
+обрабатываются. При этом вебхук ЮKassa (`127.0.0.1:8711`) и чеки «Мой налог»
+продолжают работать — сбой только в канале к `api.telegram.org`.
+
+### Вебхук ЮKassa (приём платежей)
+
+```bash
+ss -tlnp | grep 8711
+curl -s -o /dev/null -w 'hook=%{http_code}\n' -X POST \
+  http://127.0.0.1:8711/yookassa-webhook/<path>/
+```
+
+**Ожидается:** слушает `127.0.0.1:8711`; HTTP-код любой, кроме `000`
+(таймаут = процесс мёртв). ⚠️ Бот и вебхук — **один процесс**: падение
+`netru-bot` останавливает приём оплаты.
 
 ---
 
@@ -226,6 +320,12 @@ systemctl is-active x-ui nginx netru-bot certbot.timer
 Резервный вход AmneziaWG (S_RU:443/udp, зафиксирован 20.10.2026): ожидаемые результаты те же. Проверено оператором 20.10.2026 через приложение AmneziaWG: 2ip.io — `77.105.161.151`, yandex.ru/internet — `31.77.169.67`. Ссылку подписки приложение не принимает, нужна конфигурация. Состояние (только чтение): на S_RU `ss -lunp | grep -E ':443\b'` — ожидается `x-ui` на 443/udp, `ufw status numbered | grep 443` — правила 443/udp (v4 и v6); на Panel `sqlite3 -header /etc/x-ui/x-ui.db 'SELECT id,remark,port,protocol,node_id,exclude_from_sub FROM inbounds;'` — инбаунд `AmneziaWG` (id 7, `amneziawg`, 443, `node_id` как у `reality-entry`).
 
 ## Panel: чтение `bot.db` — `sqlite3` CLI и запасной путь через python3
+
+⚠️ **Правило (после инцидента 10.10.2026):** перед любой операцией с `bot.db` —
+`grep DB_PATH /opt/netru-bot/src/.env`. Настоящая БД — `/opt/netru-bot/bot.db`
+(`DB_PATH`), а не `bot.db` в рабочем каталоге процесса (`WorkingDirectory`).
+Пустышка `src/bot.db` возникала дважды (09.10 и 30.10 — во второй раз её создал
+агент одним тестовым `sqlite3`-запросом к несуществующему файлу; удалена).
 
 На новом Panel `31.77.78.144` CLI `sqlite3` есть (проверено 20.10.2026: `sqlite3 /opt/netru-bot/bot.db 'SELECT version_num FROM alembic_version;'` вернул `0003`). Запасной способ ниже описан по прежнему Panel, где пакета не было.
 

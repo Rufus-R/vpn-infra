@@ -33,7 +33,7 @@ Firewall: `ufw` (default deny incoming / deny routed). Подробности и
 | 123 | UDP | pihole-FTL | закрыт (default deny) | NTP Pi-hole, снаружи не нужен |
 | 443 | TCP | — | — | Pi-hole HTTPS отключён оператором 01.10.2026 |
 | 1194 | UDP | openvpn | `194.55.236.229` (S1) | OpenVPN-туннель S1↔S2 |
-| 38417 | TCP | x-ui (socks5, `tg-proxy`) | `31.77.78.144` (Panel) | Прокси для Telegram-бота и исходящего трафика Panel (`panelOutbound` = `tg-via-s2`); inbound создан в панели ноды S2 (мастер `mixed` для нод не создаёт), виден в мастере |
+| 38417 | TCP | x-ui (socks5, `tg-proxy`) | `31.77.78.144` (Panel) | ⛔ **Выведен из эксплуатации 30.10.2026** (S2 заблокирован провайдером — бот 17 ч не получал апдейты). Прокси Telegram-бота перенесён на S3. Inbound на S2 не удалён — вернуть при снятии блокировки (раздел S3 ниже) |
 | 10001 | TCP | xray (3x-ui нода) | S1, S_RU `31.77.169.67` (правило для старого Panel `31.77.173.218` удалено 20.10.2026; у нового Panel правила нет) | Relay-канал коммерческого проекта (VLESS+TLS) |
 | 25307 | TCP | x-ui | S1, Panel `31.77.78.144`, `46.32.82.242`, `10.8.0.0/24` | Управление 3x-ui нодой (HTTPS, IP-сертификат Let's Encrypt shortlived с 02.10.2026; для выпуска/продления нужен 80/tcp) |
 
@@ -85,6 +85,14 @@ Bootstrap: `servers/s3/bootstrap-s3.sh` (ключи оператора, ufw, IP-
 | 80 | TCP | — | Все | ACME HTTP-01 (резерв; серт IP self-signed 10 лет) |
 | 10001 | TCP | xray | `31.77.169.67` (S_RU), `194.55.236.229` (S1) | Relay-канал от S_RU (VLESS+TLS, IP-серт, `in-10001-tcp`) |
 | 25307 | TCP | — | `194.55.236.229`, `31.77.78.144`, `46.32.82.242`, `10.8.0.0/24` | Зарезервирован под будущую 3x-ui/управление (правила есть, сервиса нет) |
+| 38417 | TCP | xray (socks5, `in-38417-socks`, `tg-proxy`) | `31.77.78.144` (Panel) | ✅ **Прокси Telegram-бота с 30.10.2026** (перенос с S2 из-за блокировки). Аутентификация по логину/паролю, `udp:false`; правило ufw `tg-proxy from Panel` |
+
+⚠️ **История узла S3 (30.10.2026):** socks5-inbound добавлен в `/etc/xray/config.json`
+(`in-38417-socks`, те же порт и назначение, что были у S2). В Xray `socks` inbound с
+аутентификацией `password` требует `accounts` вида `{"user": …, "pass": …}` (не `username`/`password`
+как в 3x-ui-форме). `settings.ip` = `127.0.0.1` — адрес bind для исходящих соединений прокси,
+`listen` отдельно = `0.0.0.0`. Правило маршрутизации `in-38417-socks → direct` стоит перед
+правилом `in-10001-tcp`. Бэкап конфига: `/root/xray-config.json.bak-20261030-pre-tgproxy`.
 
 Outbound на S_RU: `to-s3-relay` (первый/default в шаблоне, uuid `7efdd1f8-16a8-4769-8507-a63373642366`,
 `pinnedPeerCertSha256` = sha256 серта `/etc/xray/certs/server.crt` на S3). При перевыпуске
