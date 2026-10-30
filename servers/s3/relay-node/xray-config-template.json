@@ -42,6 +42,19 @@
       },
       "tag": "in-10001-tcp",
       "sniffing": { "enabled": false }
+    },
+    {
+      "listen": "0.0.0.0",
+      "port": 38417,
+      "protocol": "socks",
+      "settings": {
+        "auth": "password",
+        "accounts": [ { "user": "TGPROXY_USER_PLACEHOLDER", "pass": "TGPROXY_PASS_PLACEHOLDER" } ],
+        "udp": false,
+        "ip": "127.0.0.1"
+      },
+      "tag": "in-38417-socks",
+      "sniffing": { "enabled": false }
     }
   ],
   "outbounds": [
@@ -54,6 +67,7 @@
       { "inboundTag": ["api"], "outboundTag": "api", "type": "field" },
       { "ip": ["geoip:private"], "outboundTag": "blocked", "type": "field" },
       { "outboundTag": "blocked", "protocol": ["bittorrent"], "type": "field" },
+      { "inboundTag": ["in-38417-socks"], "outboundTag": "direct", "type": "field" },
       { "inboundTag": ["in-10001-tcp"], "outboundTag": "direct", "type": "field" }
     ]
   }

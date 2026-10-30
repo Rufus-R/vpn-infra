@@ -11,6 +11,7 @@ PANEL_IP="${2:-31.77.78.144}"
 # TUNING (можно переопределить переменными окружения)
 S3_IP="${S3_IP:-$(curl -4 -s --max-time 10 ifconfig.me)}"
 RELAY_PORT="${RELAY_PORT:-10001}"
+TG_PROXY_PORT="${TG_PROXY_PORT:-38417}"
 UUID="${UUID:-$(cat /run/relay_uuid 2>/dev/null || python3 -c 'import uuid;print(uuid.uuid4())')}"
 
 [[ "$S3_IP" =~ ^[0-9.]+$ ]] || { echo "FATAL: не удалось определить публичный IP"; exit 1; }
@@ -67,6 +68,7 @@ ufw allow from 194.55.236.229 to any port 25307 proto tcp comment '3x-ui node: S
 ufw allow from "$PANEL_IP" to any port 25307 proto tcp comment '3x-ui node: Panel master'
 ufw allow from 46.32.82.242   to any port 25307 proto tcp comment '3x-ui node: operator'
 ufw allow from 10.8.0.0/24    to any port 25307 proto tcp comment '3x-ui node: VPN'
+ufw allow from "$PANEL_IP"   to any port 38417 proto tcp comment 'tg-proxy from Panel'
 # FWD-правила и tun0 — добавлять вручную при развёртывании OpenVPN (см. runbook, не нужно для relay-роли)
 ufw --force enable
 ufw status numbered
@@ -89,19 +91,33 @@ chmod +x /usr/local/xray/xray
 rm -f /tmp/xray.tgz
 
 # --- 5. Конфиг relay-инбаунда (шаблон из репо: servers/s3/relay-node/) ---
+# Шаблон содержит и socks5 tg-proxy (38417) для Telegram-бота Panel:
+# подставляем учётные данные (генерируются вместе с UUID), выводим в финале.
 python3 - "$S3_IP" <<PYEOF
 import json, sys
 s3_ip = sys.argv[1]
 tpl_path = "/root/xray-config-template.json"
 cfg = json.load(open(tpl_path))
+tg_user, tg_pass = None, None
 for inb in cfg["inbounds"]:
     if inb.get("tag") == "in-10001-tcp":
         inb["settings"]["clients"][0]["id"] = "$UUID"
         tls = inb["streamSettings"]["tlsSettings"]["certificates"][0]
         tls["certificateFile"] = "/etc/xray/certs/server.crt"
         tls["keyFile"] = "/etc/xray/certs/server.key"
+    if inb.get("tag") == "in-38417-socks":
+        acc = inb["settings"]["accounts"][0]
+        tg_user, tg_pass = acc["user"], acc["pass"]
+        if "PLACEHOLDER" in tg_user or "PLACEHOLDER" in tg_pass:
+            import secrets
+            tg_user = secrets.token_hex(6)
+            tg_pass = secrets.token_hex(8)
+            acc["user"], acc["pass"] = tg_user, tg_pass
 with open("/etc/xray/config.json", "w") as f:
     json.dump(cfg, f, indent=2, ensure_ascii=False)
+if tg_user and "PLACEHOLDER" not in (tg_user or ""):
+    with open("/run/tgproxy_creds", "w") as f:
+        f.write(f"{tg_user}:{tg_pass}\n")
 PYEOF
 
 # --- 6. systemd unit ---
@@ -131,6 +147,8 @@ systemctl is-active xray-relay
 echo "== проверки =="
 ss -tlnp | grep ":${RELAY_PORT}" || { echo "FATAL: ${RELAY_PORT} не слушается"; exit 1; }
 timeout 3 bash -c "cat < /dev/null > /dev/tcp/127.0.0.1/${RELAY_PORT}" && echo "local ${RELAY_PORT} OK"
+ss -tlnp | grep ":${TG_PROXY_PORT}" || { echo "FATAL: ${TG_PROXY_PORT} не слушается"; exit 1; }
+timeout 3 bash -c "cat < /dev/null > /dev/tcp/127.0.0.1/${TG_PROXY_PORT}" && echo "local ${TG_PROXY_PORT} (tg-proxy) OK"
 
 # --- 8. Вывод данных для переключения S_RU ---
 echo
@@ -138,6 +156,8 @@ echo "=========== ДАННЫЕ ДЛЯ ПЕРЕКЛЮЧЕНИЯ S_RU (сохра�
 echo "S3_IP=${S3_IP}"
 echo "S3_RELAY_PORT=${RELAY_PORT}"
 echo "S3_RELAY_UUID=${UUID}"
+echo "S3_TG_PROXY=socks5://<user>:<pass>@${S3_IP}:${TG_PROXY_PORT}"
+echo "  (учётные данные в /run/tgproxy_creds на S3; прописать в .env бота TG_PROXY_URL)"
 echo "S_RU outbound to-s2-relay: address=${S3_IP}, port=${RELAY_PORT}"
 echo "  tlsSettings serverName='' (пусто), allowInsecure=1 (IP-серт, как на S2)"
 echo "=================================================================="
