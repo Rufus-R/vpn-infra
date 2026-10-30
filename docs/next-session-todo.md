@@ -208,10 +208,28 @@ tg-proxy ✅, бот Panel ✅ 0 ошибок, пин `76145d04…6eef0` ✅, п
       `stream_settings` сохранён (`/etc/x-ui/certs/server.crt`, tls, alpn h2/http1.1).
       Нода не перезаписана (2 инбаунда, 10 клиентов, `client_inbounds`=10, Xray живой,
       `user_id=1` цел). Пин снаружи после регистрации — тот же (`76145d04…6eef0`).
-- [ ] **8.3 Привязать клиентов к exit-ветке в мастере** — 🚫 **ЗАБЛОКИРОВАНО
-      архитектурным правилом**. `bulkAttach` → `skipped` (сверка идёт с
+- [x] **8.3a Пин сертификата S3 в ссылках подписок** — ✅ **ВЫПОЛНЕНО 31.10.2026
+      (01:40 МСК)**. Причина отказа прямого подключения: self-signed серт S3 +
+      отсутствие `pcs` в ссылке → `x509: certificate signed by unknown authority`.
+      В `inbounds` id=8 (`in-10001-tcp`) добавлено
+      `tlsSettings.settings.pinnedPeerCertSha256=["76145d04…6eef0"]`; ссылки в
+      подписках получили `pcs=<hex>`, E2E с точной копией выданной ссылки — exit
+      `195.242.118.2` ✅. `pcs` принимает **только hex** (Xray 26.10.21,
+      `transport_security.go:365`), base64/массив — FAIL; `allowInsecure` удалён.
+      Бэкап мастера `/root/x-ui.db.bak-20261031-pre-s3-pin`. Детали —
+      `checkpoint-2026-10-31-s3-pin-in-master.md`.
+- [ ] **8.3b Подтвердить привязку клиентов к exit-ветке — состояние изменилось
+      побочно**. `POST /inbounds/update/{id}` нормализует связку: `client_inbounds`
+      для id=8 стало **10** (было 3: id 4, 26, 31), т.к. в
+      `settings.clients` инбаунда уже лежали 10 клиентов (данные в бэкапе
+      идентичны — не «появились из ниоткуда», update достроил реляционную связку).
+      Держится 20+ мин, откат §8.3 не воспроизвёлся. **Оператору подтвердить:
+      целевое ли это** (клиенты 5, 6, 8, 27–30 теперь получают в подписке вторую
+      ссылку на S3). Если нет — точечно удалить лишние строки из
+      `client_inbounds`, не трогая `settings.clients`.
+      Исходная блокировка (для истории): `bulkAttach` → `skipped` (сверка идёт с
       `inbounds.settings.clients` инбаунда 8, где усыновлённые клиенты уже есть);
-      точечный `attach` → `success`, но **откат через ~2 мин** фоновым `setRemoteTraffic`.
+      точечный `attach` → `success`, но откат через ~2 мин фоновым `setRemoteTraffic`.
       Причина: `clientEmailsOwnedElsewhere` (`inbound_node.go:498`) — email, привязанный
       к инбаунду **другой** ноды, не усыновляется с S3 (лог: `attached only to inbounds
       of another node — not adopting`). Все 9 клиентов висят на `inbound 1` (node 1 = S_RU).

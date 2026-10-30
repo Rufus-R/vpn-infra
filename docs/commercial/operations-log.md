@@ -363,3 +363,30 @@ geo-split, тест `testS2`, Hiddify/sing-box) вынесен в
 - Фикс: чтение клиентов через `get_client` вместо `list/paged` (коммит `1885b10`).
 - Коммиты: `ab7a4ff`, `8188327`, `1885b10`, `3ec08c3`, `aa43caf`, `28cee4e`.
 - Чекпоинт: `checkpoint-2026-10-28-family.md`; bot.md, system-state.md, next-session-todo.md обновлены.
+
+## Сессия 31.10.2026 — пин сертификата S3 в ссылках подписок
+
+- Причина отказа прямого подключения клиентов на S3 (pivot 30.10): `x509: certificate signed
+  by unknown authority`. Сертификат ноды self-signed (CN=195.242.118.2, до 2036-10-26), а в
+  ссылке не было пина — генератор подписок нечего было положить в `pcs`.
+- Фикс: в мастер через API (`POST /panel/api/inbounds/update/8`, Bearer-токен бота из
+  `/root/.secrets/panel-bot-token.txt`) в `streamSettings.tlsSettings.settings` инбаунда
+  `in-10001-tcp` (node_id=3) добавлено
+  `"pinnedPeerCertSha256": ["76145d045ba251990c8f17dd2b43b087ce124f2db378464bfc2e648c5dd6eef0"]`.
+  Подписки получили `pcs=<hex>`.
+- Проверено на исходниках Xray 26.10.21 (`infra/conf/transport_security.go:365`): `pcs`
+  разбирается **только как hex** (двоеточия допустимы), base64/массив → ошибка;
+  `allowInsecure` удалён (возвращает `PrintRemovedFeatureError`). Матрица тестов подтвердила.
+- Пин не утекает в run-config ноды: `grep -c pinnedPeerCertSha256 /usr/local/x-ui/bin/config.json`
+  на S3 → 0 (поле panel-only, стрипается перед пушем).
+- E2E на S_RU с **точной копией выданной ссылки** (xray 26.10.21, socks5 → `ifconfig.me`):
+  exit `195.242.118.2` ✅. Нода не перезапускалась (xray pid 75933), 10 клиентов, `relay-s3` цел.
+- Побочный эффект: `POST /inbounds/update/{id}` нормализовал связку — `client_inbounds`
+  для id=8 стало 10 (было 3: 4, 26, 31). В `inbounds.settings.clients` те же 10 клиентов
+  лежали и в бэкапе, т.е. update достроил реляционную связку по имевшимся данным.
+  Держится 20+ мин, откат §8.3 не воспроизвёлся. Клиенты 5, 6, 8, 27–30 теперь получают
+  в подписке вторую ссылку на S3 — оператору подтвердить (`next-session-todo` §8.3b).
+- Бэкап мастера: `/root/x-ui.db.bak-20261031-pre-s3-pin` (319 488 B).
+- Чекпоинт: `checkpoint-2026-10-31-s3-pin-in-master.md`; system-state.md, session-start.md,
+  next-session-todo.md обновлены. Временные артефакты удалены с S_RU, S3 и мастера.
+
