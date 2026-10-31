@@ -102,3 +102,22 @@ diagnostic-commands, checkpoints по датам), `docs/home/` (домашни�
 - E2E: public S1→S3 ✅ 200, tunnel S_RU→S3 ✅ 200, tg-proxy ✅, бот Panel без ошибок.
   Детали: `checkpoint-2026-10-30-s3-node-master-panel.md`, `next-session-todo.md` §8.
 
+## Сессия 31.10.2026 — приёмка связки, грабли subLinks/пина
+
+- **Услуга сдана:** подписка `2096/<subPath>/<subId>` отдаёт 2 ссылки — вход S_RU:443
+  (`sni=www.bing.com`) и выход S3:10001 (`pcs=<hex>`); клиент подтверждён оператором.
+  Чекпоинт: `checkpoint-2026-10-31-s3-links-verify.md`.
+- **Источник истины для `subId` — таблица `clients`**, не `inbounds.settings.clients`
+  (там subId бывает устаревшим → ложное «subLinks = 0»). Проверять:
+  `sqlite3 /etc/x-ui/x-ui.db "select id,email,sub_id from clients"`.
+- `GET /panel/api/clients/subLinks/<subId>` **флапает** (~25 % пустых ответов при живых
+  нодах; клиентский `2096` стабилен) → в скриптах/боте делать 2–3 ретрая (§8.7).
+- **Пин в клиентском конфиге — только `pinnedPeerCertSha256`** (top-level `tlsSettings`).
+  `pinnedPeerCertificateSha256` Xray молча игнорирует → падает по x509; в логах это
+  видно лишь с `"loglevel":"debug"`. `allowInsecure` в 26.10.21 удалён.
+- `fingerprint`/`alpn` ставить только если они есть в ссылке; `serverName` без `sni` —
+  адрес хоста. `servers/sru/scripts/link_probe.py` теперь умеет и Reality, и TLS+пин,
+  socks-порт через `XRAY_SOCKS_PORT` (иначе повторные прогоны дают ложный 0/3).
+- Reality-ловушка: `openssl s_client` с SNI == target висит (это норма), с посторонним
+  SNI проходит (fallback). Проверять только аутентифицированным клиентом.
+

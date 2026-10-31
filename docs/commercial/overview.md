@@ -45,7 +45,7 @@ Shadowrocket/Streisand исключены как несовместимые (sin
 
 ```
 Клиент (Happ / V2Box / v2rayNG — ядро Xray-core)
-  │  VLESS + Reality (SNI www.cloudflare.com), :443
+  │  VLESS + Reality (SNI www.bing.com), :443
   ▼
 S_RU (Xray, routing):
   ├─ geosite:category-ru, geoip:ru ───────────► direct (выход с IP S_RU)
@@ -71,7 +71,11 @@ S_RU (Xray, routing):
   Karing. Диагностика и источник — [operations-log.md](operations-log.md), «Сессия 06.10.2026».
 - Mux включён на клиенте (TCP+XUDP, concurrency 8).
 - TLS fingerprint: `firefox` — обязателен для МегаФона.
-- Reality: dest/SNI `www.cloudflare.com` (SNI `ozon.ru`/`vk.com` блокировал МегаФон). Ключи Reality в документации не хранятся.
+- Reality: dest/SNI `www.bing.com` с 31.10.2026 (до этого `www.cloudflare.com`). Причина
+  смены: Cloudflare перестал отвечать на TLS именно с IP S_RU (привязка «IP ↔ Cloudflare»,
+  подробности — `../next-session-todo.md` §8.6). `www.bing.com` проверен: TLS1.3 + ALPN h2,
+  правдоподобен для DPI. При выборе SNI помнить: `ozon.ru`/`vk.com` блокировал МегаФон.
+  Ключи Reality в документации не хранятся.
 
 ## Резервный вход AmneziaWG (зафиксирован 20.10.2026)
 
