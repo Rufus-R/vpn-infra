@@ -182,9 +182,11 @@ outbound, регистрацию нод), проходит через:
 3. **Подтверждение — явное действие оператора**, а не «всё ещё работает». Успешный
    ping или SSH после правки подтверждением НЕ считается: при утечке маршрута
    подключение может держаться на уже установленной сессии.
-4. **Реализация:** `servers/s1/scripts/openvpn-guard.sh`,
-   `servers/s1/systemd/openvpn-guard.{service,timer}`, состояние в
-   `/etc/openvpn-guard/`, лог `/var/log/openvpn-guard.log`.
+4. **Реализация:** `servers/s1/scripts/openvpn-guard.sh` →
+   `/usr/local/bin/openvpn-guard.sh`, `servers/s1/systemd/openvpn-guard.{service,timer}`,
+   состояние в `/etc/openvpn-guard/`, лог `/var/log/openvpn-guard.log`.
+   **Развёрнуто на S1 31.10.2026**, таймер enabled. Проверено инжектом маршрутов на живом
+   сервере: сняты в ту же секунду, SSH не потерян.
 5. **Область действия.** Правило обязательно для правок, способных увести egress
    (`route`, `redirect-gateway`, `ip rule`, таблицы маршрутизации, NAT). Для правок,
    не влияющих на путь до сервера, сторож не требуется.
