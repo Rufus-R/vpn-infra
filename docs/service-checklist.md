@@ -26,10 +26,11 @@
 | 1 | Приём платежей | Panel | `ss -tlnp \| grep 8711` | `127.0.0.1:8711` слушает (вебхук ЮKassa) |
 | 2 | Вебхук отвечает | Panel | `curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8711/yookassa-webhook/<path>/` | любой HTTP-код, кроме таймаута (`000`) |
 | 3 | Бот живёт | Panel | `systemctl is-active netru-bot` | `active` |
+| 3a | Legacy-бот x-ui (админ-бот панели) | Panel | `journalctl -u x-ui --since -10min \| grep -c 'Retrying getting updates'` | `0` (сейчас не `0` — см. §8, аварии не составляет) |
 | 4 | Бот говорит с Telegram | Panel | `journalctl -u netru-bot --since -10min \| grep -c 'Failed to fetch updates'` | `0` (единичные — норма) |
 | 5 | Вход для клиентов | S_RU | `ss -tlnp \| grep ':443'` | `xray` на `*:443` |
-| 6 | Exit-нода | S3 | `systemctl is-active xray-relay` + `ss -tlnp \| grep 10001` | `active`, `*:10001` |
-| 7 | Канал S_RU→S3 | S_RU | `timeout 4 bash -c 'cat < /dev/null > /dev/tcp/195.242.118.2/10001'` | код `0` |
+| 6 | Exit-нода | S3 | `systemctl is-active x-ui` + `ss -tlnp \| grep 10001` | `active`, `*:10001` (порт 10001 держит **x-ui**, `xray-relay` с 30.10.2026 остановлен) |
+| 7 | Канал S_RU→S3 | S_RU | `timeout 4 bash -c 'cat < /dev/null > /dev/tcp/10.11.0.2/10001'` | код `0` — проверять **через tun0** (`10.11.0.2`), т.к. relay-аутбаунд смотрит туда (проверено 31.10: OPEN, TLS OK, выход `195.242.118.2`) |
 | 8 | Подписки клиентам | Panel | `curl -k -s -o /dev/null -w '%{http_code}' --max-time 5 https://netru.ru.net:2096/` | `404` (порт отвечает), не `000` |
 | 9 | Домашний шлюз | S1 | `ping -c 2 -W 2 10.8.0.1` | 0% потерь |
 | 10 | Домашний DHCP/DNS | S2 | `systemctl is-active pihole-FTL` | `active` |
@@ -67,6 +68,7 @@ S1 ──► S3:8443 (tun2)  ──► backup-туннель (не работа�
 | `Bad encapsulated packet length from peer (16705)` | сдвиг потока в OpenVPN `8443/tcp` | S3 `openvpn-server@home-backup` |
 | `Connection reset, restarting [0]` | клиент OpenVPN оборван | S3 `openvpn-server@home-backup` |
 | `TLS handshake error … i/o timeout` | внешние сканеры на 2096, не наша авария | Panel `x-ui` |
+| `getUpdates: … fasthttp: tls handshake timed out` + `Retrying getting updates in 8s` | **legacy-бот внутри x-ui** не достаёт Telegram: `tgBotProxy` пуст, ходит напрямую, а часть TG DC режется. Не влияет на клиентов и платежи (`netru-bot` — отдельный процесс с другим токеном) | Panel `x-ui` |
 | `PanelApiError … record not found` | клиента удалили на Panel вручную | Panel `netru-bot` |
 | `HTTP/1.1 4xx` на `lknpd.nalog.ru` | протух токен «Мой налог» | Panel `netru-bot` |
 
@@ -105,7 +107,8 @@ Firewall — `iptables` (ufw на S1 нет).
 
 | Сервис / порт | Команда | Ожидается |
 |---------------|---------|-----------|
-| `xray-relay` (10001) | `systemctl is-active xray-relay` | `active` |
+| `x-ui` (10001) | `systemctl is-active x-ui` | `active` — с 30.10.2026 порт 10001 держит x-ui; `xray-relay` остановлен/disabled |
+| `x-ui` legacy-бот (встроен) | `systemctl is-active x-ui` + `journalctl -u x-ui --since -10min \| grep -icE 'getUpdates\|tls handshake'` | на **ноде** бот не настроен (`tgBotEnable` нет) — счётчик `0`; проверять только на мастере (§8) |
 | `openvpn-server@home-backup` (8443/tcp) | `systemctl is-active openvpn-server@home-backup` | `active` |
 | Порт relay | `ss -tlnp \| grep ':10001'` | `*:10001` |
 | Порт `tg-proxy` (socks5) | `ss -tlnp \| grep ':38417'` | слушает (с 30.10.2026) |
@@ -122,7 +125,11 @@ Firewall — `iptables` (ufw на S1 нет).
 | Порт входа | `ss -tlnp \| grep ':443'` | `xray` на `*:443` |
 | Порт панели ноды | `ss -tlnp \| grep ':24167'` | `x-ui`, доступ ограничен ufw |
 | Конфиг Xray | `/usr/local/x-ui/bin/xray-linux-amd64 run -test -c /usr/local/x-ui/bin/config.json` | `Configuration OK` |
-| Порядок outbound | `python3 -c "…outbounds…"` (см. `diagnostic-commands.md`) | `to-s3-relay` первым, `to-s2-relay` вторым |
+| Порядок outbound | `python3 -c "…outbounds…"` (см. `diagnostic-commands.md`) | `to-s3-relay` первым (адрес **`10.11.0.2:10001`**, т.е. через tun0), `to-s2-relay` вторым |
+| Туннель S_RU↔S3 `tun0` | `ip -4 addr show tun0` + `systemctl is-active openvpn-server@sru-transport` | `10.11.0.1/24`, `active`, `mtu 1300` |
+| Связность через туннель | `ping -c 3 -W 2 10.11.0.2` | 0% потерь, ~42 ms (проверено 31.10) |
+| Relay-путь живой | `timeout 8 bash -c 'cat < /dev/null > /dev/tcp/10.11.0.2/10001'` + `openssl s_client -connect 10.11.0.2:10001` | TCP OPEN, `CN=195.242.118.2`, verify code `18` (self-signed — ожидаемо, пин в конфиге) |
+| Сквозной выход через relay | временный xray-конфиг socks→`to-s3-relay`, `curl --socks5-hostname … ifconfig.me` | `195.242.118.2` (проверено 31.10) |
 | geo-split | тот же скрипт по `routing.rules` | `geosite:category-ru` → `direct`, `geoip:ru` → `direct` |
 | Сертификат IP | `acme.sh --list` / `openssl x509 -enddate -noout -in /root/cert/ip/fullchain.pem` | renew ≤ 3 суток до истечения (короткоживущие LE) |
 | Выход в интернет | `curl -s --max-time 5 https://ifconfig.me` | `31.77.169.67` |
@@ -144,6 +151,58 @@ Firewall — `iptables` (ufw на S1 нет).
 | Токен «Мой налог» | `journalctl -u netru-bot --since -24h \| grep 'проверка токена' \| tail -1` | `ok` (проверка 09:00 МСК) |
 | Диск / память | `df -h / \| tail -1`, `free -m` | диск < 80%, available > 150 МиБ |
 
+### 8.1 Мониторинг входа S_RU с мастера (МСК) — Reality probe
+
+Держать вход под наблюдением, потому что Reality-рукопожатие может умереть при живом
+TCP: снаружи видно `TCP OPEN`, а TLS висит. Проверка двухступенчатая — TCP отдельно
+от полезной нагрузки:
+
+```bash
+# 1) TCP (быстро, ловит сетевой блок)
+timeout 6 bash -c 'cat < /dev/null > /dev/tcp/31.77.169.67/443'   # EXPECT rc=0
+
+# 2) Реальное Reality-рукопожатие клиентом (ловит поломку xray/target)
+python3 servers/sru/scripts/probe_reality.py sru --xray          # EXPECT rc=0, exit 31.77.169.67
+python3 servers/sru/scripts/probe_reality.py s3 --xray           # контроль, EXPECT rc=0
+```
+
+Запускать с мастера (МСК): `ssh root@31.77.78.144 'python3 probe_reality.py sru --xray'`.
+
+**Обязательно с `--xray`.** Без флага скрипт делает только `openssl s_client`, а он
+в этот инцидент проходит (fallback отдаёт серт Cloudflare) и даёт **ложный OK**:
+Reality ломается на аутентифицированном пути, а не на приёме ClientHello.
+Проверено 31.10.2026: `probe_reality.py sru` → rc=0 «handshake OK»,
+`probe_reality.py sru --xray` → rc=1 TIMEOUT. Параметры (UUID, `pbk`, `sid`, `sni`)
+скрипт читает из мастера через API, в код их не хардкодить.
+
+Пороги для алертов:
+
+| Условие | Значение |
+|---------|----------|
+| TCP rc≠0 подряд 2 раза | алерт «вход S_RU недоступен по сети» |
+| TCP OK, но Reality TIMEOUT подряд 3 раза (за 3 мин) | алерт «Reality-рукопожатие не отвечает» + прогон §8.2 |
+| `ifconfig.me` вернул не `31.77.169.67` | алерт «выход сменился, проверить outbounds» |
+
+Опрашивать с мастера **и** с домашнего ISP (S1 при провайдере AS216334 даёт
+ложно-отрицательный результат: у него нет внешнего фильтра).
+
+### 8.2 Диагностика «TCP OPEN, TLS висит» — порядок проверок
+
+Проверено 31.10.2026 на S_RU; порядок отсекает ложные гипотезы за 5 шагов.
+
+| Шаг | Проверка | Что отсекает |
+|-----|----------|--------------|
+| 1 | `openssl s_client -connect 127.0.0.1:443 -servername <sni>` **на самом S_RU** | если висит и на loopback — проблема серверная, не сеть. ⚠️ Прохождение этой проверки НЕ означает, что вход работает: fallback отдаёт серт цели, а Reality-путь может быть мёртв |
+| 2a | `probe_reality.py sru --xray` (аутентифицированный клиент) | именно это показывает поломку: TCP OK + TLS OK + payload TIMEOUT |
+| 2b | Свободный инстанс xray на `127.0.0.1:18443` со своими ключами и тем же `target` | конфиг/ключи/боевой процесс |
+| 3 | Тот же инстанс с `target` = не-Cloudflare (`www.microsoft.com:443`) | привязка к конкретной цели |
+| 4 | `openssl s_client` к `target` напрямую, 5 попыток | сетевая доступность цели (было 5/5 OK) |
+| 5 | Обратный fallback: `openssl s_client` на 18443 с `-servername <target>` | должен вернуть серт цели — подтверждает, что «ключ+shortId» путь отдельный от fallback |
+
+Ключевой признак в трассе: клиент отдаёт ClientHello (≈1893 B, видно SNI), сервер его
+ACK-ает и **молчит**; при этом сервер сам открывает соединение к `target` и получает
+SYN-ACK — значит зависает внутренний TLS к цели, а не приём.
+
 ## 9. Известные устойчивые отклонения (не считать аварией)
 
 | Отклонение | Причина | Где |
@@ -151,6 +210,7 @@ Firewall — `iptables` (ufw на S1 нет).
 | `ping 10.10.0.1` — 100% loss, tun2 почти без трафика | баг/сдвиг потока в OpenVPN `8443/tcp` (гипотеза 29.10, репродукция на loopback — открытая задача) | S1↔S3 |
 | S2 не отвечает снаружи на любые порты | блокировка провайдера (тикет отправлен 29.10) | S2 |
 | `S_RU → S2:10001` FAIL | следствие блокировки S2; рабочий выход — S3 | S_RU |
+| `S_RU:443` — TCP OPEN, обычный TLS проходит, Reality-клиент висит (любая сеть, вкл. loopback и NL) | Reality с `target=www.cloudflare.com:443` не завершает внутренний TLS к Cloudflare; тот же инстанс с `target=www.microsoft.com:443` работает 100%, на S3 target Cloudflare работает — привязка «этот IP ↔ Cloudflare» (31.10.2026). Обычный TLS идёт через fallback — не путать с рабочим входом | S_RU |
 | `list/paged` отдаёт пустой массив | особенность установки 3x-ui; читать через `get_client` | Panel |
 | `TLS handshake error` на 2096 | внешние сканеры, ~56/сутки | Panel |
 
