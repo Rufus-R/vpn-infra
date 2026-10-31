@@ -42,6 +42,11 @@ DNS 1.1.1.1. `openvpn@s3-backup` маскирован (конфликт подс
 3b. ✅ `ta.key` ротирован 31.10.2026 **раздельно**: клиентский VPN и туннель S1↔S3 на
   разных ключах (до этого был один общий — `7731eee7…`). Репетиция на `tun8`/`tun9`,
   откат `/root/ta-rotate/rollback.sh`. 8 `.ovpn` в `/opt/vpn-admin/clients/` обновлены.
+3d. ⚠️ **OPNsense01 офлайн с 21:16 31.10.** Причина: старый `ta.key` (HMAC auth failed).
+  Сертификат перевыпущен (`5F9F0FEB…`, старый `195E0B58…` отозван в CRL), `.ovpn`
+  обновлён, комплект для роутера — `/root/opnsense01-rotate/handoff/`. Оператору нужно
+  на роутере: импорт `OPNsense01.crt/.key`, новый `ta.key`, **key-direction 1**.
+  Инструкция — `docs/home/admin/opnsense.md`. Откат — `/root/opnsense01-rotate/rollback.sh`.
 3c. ⚠️ **Действие оператора:** раздать клиентам новые `.ovpn` из `/opt/vpn-admin/clients/`.
   Старые файлы на устройствах подписаны старым ключом и не подключатся. Процедура —
   `docs/home/admin/backups.md`, раздел «Ротация `ta.key`».

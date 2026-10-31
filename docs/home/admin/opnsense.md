@@ -29,6 +29,26 @@ OPNsense — домашний роутер, подключённый к S1 ка�
 
 Копия на S1: `/root/opnsense01/`
 
+**Актуально на 31.10.2026:** сертификат `OPNsense01` перевыпущен (serial `5F9F0FEB…`,
+прежний `195E0B58…` отозван и внесён в CRL), обновлены `ta.key` и `.ovpn`.
+Готовый комплект для переноса — `/root/opnsense01-rotate/handoff/`.
+Откат — `/root/opnsense01-rotate/rollback.sh`.
+
+### Замена сертификата на роутере
+
+Порядок обязателен: сначала S1 отзывает старый серт (CRL), потом роутер получает новый.
+Иначе роутер подключается отозванным сертификатом и получает отказ.
+
+1. System → Trust → Certificates → **Import** `ca.crt` (если ещё нет).
+2. Certificates → **Import** `OPNsense01.crt` + `OPNsense01.key`.
+3. VPN → OpenVPN → Clients → `VPN_S1`:
+   - **Certificate** → выбрать новый `OPNsense01` (по serial, не по имени: имена совпадают);
+   - **TLS Shared Secret** → вставить содержимое `ta.key` (это и есть причина обрыва
+     31.10.2026 — старый `ta.key` после ротации);
+   - **TLS Shared Secret Key Direction** → `1` (критично: направление 1, не 0).
+4. Сохранить и **переподключить** клиент. Проверить: `vpn status` показывает `up`,
+   на S1 `CLIENT_LIST` содержит `OPNsense01` с `10.9.0.5`.
+
 ## Custom options
 
 ```
