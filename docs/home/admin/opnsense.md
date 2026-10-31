@@ -49,6 +49,69 @@ OPNsense — домашний роутер, подключённый к S1 ка�
 4. Сохранить и **переподключить** клиент. Проверить: `vpn status` показывает `up`,
    на S1 `CLIENT_LIST` содержит `OPNsense01` с `10.9.0.5`.
 
+## Команды: получить материал ключей с S1
+
+Все команды выполняются **на S1**, от `root`. Приватный ключ никуда не передавать:
+копировать через терминал, не через чат и не через почту.
+
+### Вариант A: архив целиком
+
+```bash
+cd /root/opnsense01-rotate/handoff
+tar tzvf opnsense01-keys.tar.gz          # проверить содержимое
+sha256sum -c SHA256SUMS                  # проверить целостность
+base64 -w0 opnsense01-keys.tar.gz        # получить строку для переноса
+```
+
+На своей машине сохранить строку в файл и распаковать:
+
+```bash
+base64 -d opnsense01-keys.tar.gz.b64 > opnsense01-keys.tar.gz
+tar xzf opnsense01-keys.tar.gz
+```
+
+### Вариант B: по блокам, для вставки в веб-интерфейс
+
+```bash
+/root/opnsense01-rotate/handoff/show-block.sh ca     # → CA
+/root/opnsense01-rotate/handoff/show-block.sh cert   # → Certificate
+/root/opnsense01-rotate/handoff/show-block.sh key    # → Private key
+/root/opnsense01-rotate/handoff/show-block.sh ta     # → TLS Shared Secret
+```
+
+Чтобы вывод не попал в историю shell, писать в файл и читать редактором:
+
+```bash
+umask 077
+/root/opnsense01-rotate/handoff/show-block.sh ca   > /root/out-ca.txt
+/root/opnsense01-rotate/handoff/show-block.sh cert > /root/out-cert.txt
+/root/opnsense01-rotate/handoff/show-block.sh key  > /root/out-key.txt
+/root/opnsense01-rotate/handoff/show-block.sh ta   > /root/out-ta.txt
+```
+
+### Источники файлов напрямую
+
+| Блок | Файл на S1 | Куда вставлять |
+|---|---|---|
+| CA | `/etc/openvpn/server-easy-rsa/pki/ca.crt` | System → Trust → Certificates → Authorities → Import |
+| Certificate | `/etc/openvpn/server-easy-rsa/pki/issued/OPNsense01.crt` | Trust → Certificates → Certificates → Import (вместе с ключом) |
+| Private key | `/etc/openvpn/server-easy-rsa/pki/private/OPNsense01.key` | там же, поле Private key |
+| TLS Shared Secret | `/etc/openvpn/server/ta.key` | VPN → OpenVPN → Clients → `VPN_S1` → TLS Shared Secret |
+
+**Про `OPNsense01.crt`:** проверено — `pki/issued/OPNsense01.crt` содержит **ровно один**
+блок `-----BEGIN CERTIFICATE-----` … `-----END CERTIFICATE-----`, 85 строк, без
+приватного ключа. `handoff/OPNsense01.crt` — тот же блок побайтово (`diff` чистый).
+Оба файла годятся для импорта; в `handoff/` просто лежит готовый комплект.
+
+**Проверка перед вставкой:**
+
+```bash
+openssl x509 -in /root/opnsense01-rotate/handoff/OPNsense01.crt -noout -serial -dates
+# ожидается: serial=5F9F0FEB3368F4D1618109C306E0770C, notAfter=Feb  2 18:19:09 2029 GMT
+```
+
+Если serial другой — взят старый или не тот файл, подключения не будет.
+
 ## Custom options
 
 ```
