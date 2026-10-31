@@ -1,0 +1,11 @@
+[Unit]
+Description=Run OpenVPN route guard every 60s
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=60s
+AccuracySec=5s
+Unit=openvpn-guard.service
+
+[Install]
+WantedBy=timers.target

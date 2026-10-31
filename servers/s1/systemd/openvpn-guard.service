@@ -1,0 +1,10 @@
+[Unit]
+Description=OpenVPN route guard: rollback egress hijack on S1
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/openvpn-guard.sh check
+# Не падать, если откат не удался: следующая итерация таймера повторит попытку.
+SuccessExitStatus=0 1
