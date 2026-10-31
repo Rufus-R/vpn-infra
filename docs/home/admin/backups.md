@@ -94,3 +94,27 @@ ip route show table all > /root/vpn-infra-backup/s1/routes_$(date +%Y%m%d).txt
 8. Маршрутизация: `/etc/iproute2/rt_tables`, `/etc/openvpn/client/route-up.sh`
 9. iptables: `/etc/iptables/rules.v4`
 10. sysctl: `/etc/sysctl.conf`
+
+## Ротация `ta.key` (31.10.2026)
+
+Ключи разделены: клиентский VPN и туннель S1↔S3 больше не используют один `ta.key`.
+
+| Назначение | Файл | Примечание |
+|---|---|---|
+| Клиентский VPN | `/etc/openvpn/server/ta.key` | ротирован 31.10.2026 |
+| Туннель S1↔S3 | `/etc/openvpn/server-home-s3/ta.key` | ротирован 31.10.2026, отдельный ключ |
+
+Старые ключи и резервные копии — `/root/ta-rotate/`:
+
+- `old/ta.key.clientvpn`, `old/ta.key.tunnel` — прежний общий ключ (по одной копии)
+- `new/ta.key`, `new/ta.key.clientvpn` — текущие
+- `ovpn-old/` — 8 старых `.ovpn` из `/opt/vpn-admin/clients/`
+- `rollback.sh` — откат: возвращает старые ключи в оба юнита и перезапускает их
+
+**Откат:** `/root/ta-rotate/rollback.sh`. Возвращает туннель и клиентский VPN на старый
+общий ключ. Старые `.ovpn` тоже нужно вернуть из `ovpn-old/`, иначе клиенты не подключатся.
+
+**Клиентские конфиги.** После ротации 8 файлов в `/opt/vpn-admin/clients/*.ovpn` обновлены
+на новый ключ. Новые клиенты через `vpn-admin` получают актуальный ключ автоматически —
+инструмент читает `/etc/openvpn/server/ta.key` при генерации. Уже выданные клиентам файлы
+**нужно заменить вручную**: их копии лежат на устройствах и подписаны старым ключом.
