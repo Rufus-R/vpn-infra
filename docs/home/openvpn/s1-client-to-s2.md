@@ -62,7 +62,7 @@ route-up /etc/openvpn/client/route-up.sh
 ip rule add to 10.9.0.0/24 table main pref 110 2>/dev/null || true
 ip rule add from 10.9.0.0/24 to 192.168.0.0/24 table main pref 111 2>/dev/null || true
 ip rule add from 10.9.0.0/24 table vpn pref 120 2>/dev/null || true
-ip route add default via 10.8.0.1 dev tun0 table vpn 2>/dev/null || true
+# default таблицы vpn теперь задаёт /etc/openvpn/server/route-up-home-s3.sh (dev tun3)
 
 ```
 
@@ -89,8 +89,12 @@ chmod +x /etc/openvpn/client/route-up.sh
 
 ### Таблица vpn (120):
 ```
-default via 10.8.0.1 dev tun0
+default dev tun3        # выход через S3 (home-s3, с 31.10.2026)
 ```
+Раньше здесь был `default via 10.8.0.1 dev tun0` (выход через S2). S2 с 29.10.2026
+заблокирован провайдером, поэтому выход переведён на S3: маршрут ставит
+`route-up` сервера `home-s3` (`servers/s1/openvpn/route-up-home-s3.sh`).
+Скрипт `s2-client` теперь добавляет только `ip rule`, без маршрута в таблицу `vpn`.
 
 ## Запуск
 

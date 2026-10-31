@@ -58,7 +58,7 @@ COMMIT
 -A PREROUTING -m addrtype --dst-type LOCAL -j DOCKER
 -A OUTPUT ! -d 127.0.0.0/8 -m addrtype --dst-type LOCAL -j DOCKER
 -A POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j MASQUERADE
--A POSTROUTING -s 10.9.0.0/24 -o tun0 -j MASQUERADE
+-A POSTROUTING -s 10.9.0.0/24 -o tun3 -j MASQUERADE
 -A POSTROUTING -o tun0 -m owner --uid-owner 999 -j MASQUERADE
 COMMIT
 # Completed on Tue Sep 22 18:18:16 2026
